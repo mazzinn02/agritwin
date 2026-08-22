@@ -1,0 +1,126 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AppLayout } from './components/Layout/AppLayout';
+import { UserModeProvider } from './context/UserModeContext';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute, AdminRoute, PublicOnlyRoute } from './components/Auth/AuthGuard';
+import { GuidedOnboardingWizard } from './components/Onboarding/GuidedOnboardingWizard';
+
+import Login from './pages/Login';
+import SignUp from './pages/SignUp';
+import UserManagement from './pages/UserManagement';
+
+import Dashboard from './pages/Dashboard';
+import CropComparison from './pages/CropComparison';
+import CropVision from './pages/CropVision';
+import FieldLog from './pages/FieldLog';
+import Analytics from './pages/Analytics';
+import AIAdvisor from './pages/AIAdvisor';
+import WhatIfSimulator from './pages/WhatIfSimulator';
+import VirtualFarm from './pages/VirtualFarm';
+import MapView from './pages/MapView';
+import CameraFeed from './pages/CameraFeed';
+import MySensors from './pages/MySensors';
+import DeviceControl from './pages/DeviceControl';
+import Crops from './pages/farm-management/Crops';
+import FieldAuditLog from './pages/farm-management/FieldAuditLog';
+
+// Clean-Slate Gatekeeper: redirects to /onboarding if no farm/plot exists
+const CleanSlateGatekeeper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
+  const rawProfile = typeof window !== 'undefined' ? localStorage.getItem('agri_farm_profile') : null;
+  const rawPlots = typeof window !== 'undefined' ? localStorage.getItem('agri_plots') : null;
+
+  const isCleanSlate = !rawProfile && !rawPlots;
+
+  if (isCleanSlate && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <UserModeProvider>
+        <Router>
+          <Routes>
+            {/* Public Authentication Routes */}
+            <Route
+              path="/login"
+              element={
+                <PublicOnlyRoute>
+                  <Login />
+                </PublicOnlyRoute>
+              }
+            />
+            <Route
+              path="/signup"
+              element={
+                <PublicOnlyRoute>
+                  <SignUp />
+                </PublicOnlyRoute>
+              }
+            />
+
+            {/* Protected Onboarding Wizard */}
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <GuidedOnboardingWizard />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Protected Main Application Layout */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <CleanSlateGatekeeper>
+                    <AppLayout />
+                  </CleanSlateGatekeeper>
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="vision" element={<CropVision />} />
+              <Route path="history" element={<FieldLog />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="advisor" element={<AIAdvisor />} />
+              <Route path="what-if" element={<WhatIfSimulator />} />
+              <Route path="virtual-farm" element={<VirtualFarm />} />
+              <Route path="map" element={<MapView />} />
+              <Route path="camera" element={<CameraFeed />} />
+              <Route path="sensors" element={<MySensors />} />
+              <Route path="control" element={<DeviceControl />} />
+              <Route path="compare" element={<CropComparison />} />
+              
+              {/* Farm Management Routes */}
+              <Route path="farm-management/crops" element={<Crops />} />
+              <Route path="farm-management/audit-log" element={<FieldAuditLog />} />
+              <Route path="audit-log" element={<FieldAuditLog />} />
+
+              {/* Admin-Only Routes */}
+              <Route
+                path="users"
+                element={
+                  <AdminRoute>
+                    <UserManagement />
+                  </AdminRoute>
+                }
+              />
+            </Route>
+
+            {/* Catch-all redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </UserModeProvider>
+    </AuthProvider>
+  );
+}
+
+export default App;
