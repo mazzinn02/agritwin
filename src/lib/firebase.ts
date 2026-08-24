@@ -116,6 +116,34 @@ export async function getAllUsers(): Promise<UserProfile[]> {
   return cached;
 }
 
+export async function saveFarmRecord(farmData: any): Promise<void> {
+  try {
+    const farmDocRef = doc(firestoreDb, 'farms', farmData.id);
+    await setDoc(farmDocRef, farmData, { merge: true });
+  } catch (err) {
+    console.warn('Firestore setDoc farm notice:', err);
+  }
+  try {
+    await set(ref(db, `farms/${farmData.id}`), farmData);
+  } catch (err) {
+    console.warn('Realtime DB farm set notice:', err);
+  }
+}
+
+export async function saveSectionPlotRecord(plotData: any): Promise<void> {
+  try {
+    const plotDocRef = doc(firestoreDb, 'plots', plotData.id);
+    await setDoc(plotDocRef, plotData, { merge: true });
+  } catch (err) {
+    console.warn('Firestore setDoc plot notice:', err);
+  }
+  try {
+    await set(ref(db, `plots/${plotData.id}`), plotData);
+  } catch (err) {
+    console.warn('Realtime DB plot set notice:', err);
+  }
+}
+
 // ----------------------------------------------------
 // Mock Firebase Realtime Database Implementation for Prototype
 // This provides local reactive state with localStorage persistence for existing pages.

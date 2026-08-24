@@ -25,6 +25,8 @@ import DeviceControl from './pages/DeviceControl';
 import Crops from './pages/farm-management/Crops';
 import FieldAuditLog from './pages/farm-management/FieldAuditLog';
 
+import AddNewFarmlandPage from './pages/AddNewFarmlandPage';
+
 // Clean-Slate Gatekeeper: redirects to /onboarding if no farm/plot exists
 const CleanSlateGatekeeper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -85,33 +87,26 @@ function App() {
                 </ProtectedRoute>
               }
             >
+              {/* Shared Routes (Both Admin and Farmer/Worker) */}
               <Route index element={<Dashboard />} />
-              <Route path="vision" element={<CropVision />} />
-              <Route path="history" element={<FieldLog />} />
               <Route path="analytics" element={<Analytics />} />
-              <Route path="advisor" element={<AIAdvisor />} />
-              <Route path="what-if" element={<WhatIfSimulator />} />
-              <Route path="virtual-farm" element={<VirtualFarm />} />
-              <Route path="map" element={<MapView />} />
-              <Route path="camera" element={<CameraFeed />} />
-              <Route path="sensors" element={<MySensors />} />
+              <Route path="vision" element={<CropVision />} />
               <Route path="control" element={<DeviceControl />} />
-              <Route path="compare" element={<CropComparison />} />
-              
-              {/* Farm Management Routes */}
-              <Route path="farm-management/crops" element={<Crops />} />
-              <Route path="farm-management/audit-log" element={<FieldAuditLog />} />
-              <Route path="audit-log" element={<FieldAuditLog />} />
+              <Route path="camera" element={<CameraFeed />} />
+              <Route path="map" element={<MapView />} />
 
               {/* Admin-Only Routes */}
-              <Route
-                path="users"
-                element={
-                  <AdminRoute>
-                    <UserManagement />
-                  </AdminRoute>
-                }
-              />
+              <Route path="add-farmland" element={<AdminRoute><AddNewFarmlandPage /></AdminRoute>} />
+              <Route path="history" element={<AdminRoute><FieldLog /></AdminRoute>} />
+              <Route path="advisor" element={<AdminRoute><AIAdvisor /></AdminRoute>} />
+              <Route path="what-if" element={<AdminRoute><WhatIfSimulator /></AdminRoute>} />
+              <Route path="virtual-farm" element={<AdminRoute><VirtualFarm /></AdminRoute>} />
+              <Route path="sensors" element={<AdminRoute><MySensors /></AdminRoute>} />
+              <Route path="compare" element={<AdminRoute><CropComparison /></AdminRoute>} />
+              <Route path="farm-management/crops" element={<AdminRoute><Crops /></AdminRoute>} />
+              <Route path="farm-management/audit-log" element={<AdminRoute><FieldAuditLog /></AdminRoute>} />
+              <Route path="audit-log" element={<AdminRoute><FieldAuditLog /></AdminRoute>} />
+              <Route path="users" element={<AdminRoute><UserManagement /></AdminRoute>} />
             </Route>
 
             {/* Catch-all redirect */}

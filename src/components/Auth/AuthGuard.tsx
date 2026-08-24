@@ -50,20 +50,7 @@ export const AdminRoute: React.FC<{ children?: React.ReactNode }> = ({ children 
   }
 
   if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 shadow-xl p-8 text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center">
-            <ShieldAlert className="w-8 h-8" />
-          </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">Administrator Access Required</h3>
-          <p className="text-sm text-slate-600 mb-6">
-            This module is restricted to Administrators only. Your current role is configured as Farmer / Field Worker.
-          </p>
-          <Navigate to="/" replace />
-        </div>
-      </div>
-    );
+    return <Navigate to="/" replace />;
   }
 
   return children ? <>{children}</> : <Outlet />;

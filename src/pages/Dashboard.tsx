@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Thermometer, 
   Droplets, 
@@ -17,17 +18,20 @@ import {
   Layers,
   ShieldCheck,
   Cpu,
-  MapPin
+  MapPin,
+  PlusCircle
 } from 'lucide-react';
 import { CropGrowthTracker } from '../components/dashboard/CropGrowthTracker';
 import { DailyActionBanner } from '../components/common/DailyActionBanner';
 import { useUserMode } from '../context/UserModeContext';
+import { useAuth } from '../context/AuthContext';
 import { getFarmProfile, getPlots, getCrops, updatePlot, addTelemetryRecord } from '../lib/farm-storage';
 import { logFieldAction } from '../lib/audit-log';
 import { FarmProfile, PlotBed, Crop } from '../types';
 
 export const Dashboard = () => {
   const { isFarmer } = useUserMode();
+  const { isAdmin } = useAuth();
   const [farmProfile, setFarmProfile] = useState<FarmProfile | null>(null);
   const [plots, setPlots] = useState<PlotBed[]>([]);
   const [crops, setCrops] = useState<Crop[]>([]);
@@ -163,10 +167,21 @@ export const Dashboard = () => {
     return (
       <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 shadow-xs space-y-4">
         <Sprout className="w-12 h-12 text-emerald-800 mx-auto" />
-        <h2 className="text-xl font-bold text-slate-900">No Plots Configured Yet</h2>
+        <h2 className="text-xl font-bold text-slate-900">No Farmland / Plots Configured Yet</h2>
         <p className="text-sm text-slate-500 max-w-md mx-auto">
-          Your digital twin farm currently has no active soil beds. Complete the Onboarding Wizard or add a plot in Virtual Farm.
+          Your digital twin farm currently has no active soil beds. Add a new farmland property or complete the onboarding wizard.
         </p>
+        {isAdmin && (
+          <div className="pt-2">
+            <Link
+              to="/add-farmland"
+              className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 transition-all"
+            >
+              <PlusCircle className="w-5 h-5" />
+              <span>+ Add New Farmland</span>
+            </Link>
+          </div>
+        )}
       </div>
     );
   }
@@ -200,8 +215,18 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* Right: Dynamic Plot Selector & Live Edge Indicator */}
+        {/* Right: Dynamic Plot Selector, Admin Action & Live Edge Indicator */}
         <div className="flex flex-wrap items-center gap-3">
+          {isAdmin && (
+            <Link
+              to="/add-farmland"
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition-all"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>+ Add Farmland</span>
+            </Link>
+          )}
+
           <div className="flex items-center space-x-2 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Bed:</span>
             <select
