@@ -32,16 +32,40 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
-const ACTIVE_SESSION_KEY = 'agritwin_active_session';
-const LOCAL_CREDENTIALS_KEY = 'agritwin_user_credentials';
+const DEFAULT_CREDENTIALS: Record<string, { password: string; profile: UserProfile }> = {
+  'admin@agritwin.com': {
+    password: 'admin123',
+    profile: {
+      uid: 'usr_admin_001',
+      email: 'admin@agritwin.com',
+      full_name: 'System Administrator',
+      role: 'admin',
+      assigned_farm_ids: [],
+      created_at: new Date().toISOString()
+    }
+  },
+  'farmer@agritwin.com': {
+    password: 'farmer123',
+    profile: {
+      uid: 'usr_farmer_002',
+      email: 'farmer@agritwin.com',
+      full_name: 'Field Worker / Farmer',
+      role: 'farmer',
+      assigned_farm_ids: [],
+      created_at: new Date().toISOString()
+    }
+  }
+};
 
 const getStoredCredentials = (): Record<string, { password: string; profile: UserProfile }> => {
-  if (typeof window === 'undefined') return {};
+  if (typeof window === 'undefined') return DEFAULT_CREDENTIALS;
   try {
     const raw = localStorage.getItem(LOCAL_CREDENTIALS_KEY);
-    return raw ? JSON.parse(raw) : {};
+    if (raw) return JSON.parse(raw);
+    localStorage.setItem(LOCAL_CREDENTIALS_KEY, JSON.stringify(DEFAULT_CREDENTIALS));
+    return DEFAULT_CREDENTIALS;
   } catch (e) {
-    return {};
+    return DEFAULT_CREDENTIALS;
   }
 };
 

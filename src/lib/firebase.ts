@@ -36,19 +36,37 @@ export interface UserProfile {
   created_at: string;
 }
 
-// Local cache helper for instant UI feedback and fallback
-const USERS_STORAGE_KEY = 'agritwin_users_cache';
+const DEFAULT_USERS: Record<string, UserProfile> = {
+  'usr_admin_001': {
+    uid: 'usr_admin_001',
+    email: 'admin@agritwin.com',
+    full_name: 'System Administrator',
+    role: 'admin',
+    assigned_farm_ids: [],
+    created_at: new Date().toISOString()
+  },
+  'usr_farmer_002': {
+    uid: 'usr_farmer_002',
+    email: 'farmer@agritwin.com',
+    full_name: 'Field Worker / Farmer',
+    role: 'farmer',
+    assigned_farm_ids: [],
+    created_at: new Date().toISOString()
+  }
+};
 
 const getCachedUsers = (): Record<string, UserProfile> => {
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(USERS_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : {};
+      if (raw) return JSON.parse(raw);
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(DEFAULT_USERS));
+      return DEFAULT_USERS;
     } catch (e) {
-      return {};
+      return DEFAULT_USERS;
     }
   }
-  return {};
+  return DEFAULT_USERS;
 };
 
 const setCachedUser = (profile: UserProfile) => {
