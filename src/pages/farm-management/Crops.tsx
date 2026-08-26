@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Sprout, 
   Plus, 
@@ -16,12 +16,11 @@ import {
   Sparkles,
   Info
 } from 'lucide-react';
-import { Crop, PlotBed } from '../../types';
-import { getCrops, getPlots, addCrop, updateCrop, deleteCrop } from '../../lib/farm-storage';
+import { Crop } from '../../types';
+import { useAgriStore } from '../../context/AgriStore';
 
 export const Crops: React.FC = () => {
-  const [crops, setCrops] = useState<Crop[]>([]);
-  const [plots, setPlots] = useState<PlotBed[]>([]);
+  const { crops, addCrop, updateCrop, deleteCrop, activeSections } = useAgriStore();
   const [search, setSearch] = useState('');
   
   // Modals state
@@ -41,30 +40,14 @@ export const Crops: React.FC = () => {
   const [formTempMax, setFormTempMax] = useState<number | ''>(28);
   const [formPhMin, setFormPhMin] = useState<number | ''>(6.0);
   const [formPhMax, setFormPhMax] = useState<number | ''>(6.8);
+  const [formGddBase, setFormGddBase] = useState<number | ''>(10);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
-  const reloadData = () => {
-    setCrops(getCrops());
-    setPlots(getPlots());
-  };
-
-  useEffect(() => {
-    reloadData();
-
-    const handleStorageUpdate = () => {
-      reloadData();
-    };
-
-    window.addEventListener('agri_storage_updated', handleStorageUpdate);
-    return () => window.removeEventListener('agri_storage_updated', handleStorageUpdate);
-  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Open Add Modal
   const openAddModal = () => {
     setFormName('');
     setFormVariety('');
@@ -76,12 +59,12 @@ export const Crops: React.FC = () => {
     setFormTempMax(28);
     setFormPhMin(6.0);
     setFormPhMax(6.8);
+    setFormGddBase(10);
     setFormErrors({});
     setEditingCrop(null);
     setModalMode('add');
   };
 
-  // Open Edit Modal
   const openEditModal = (crop: Crop) => {
     setFormName(crop.name);
     setFormVariety(crop.variety);
@@ -93,12 +76,12 @@ export const Crops: React.FC = () => {
     setFormTempMax(crop.idealTempMax);
     setFormPhMin(crop.idealPhMin);
     setFormPhMax(crop.idealPhMax);
+    setFormGddBase(crop.gddBaseTemp ?? 10);
     setFormErrors({});
     setEditingCrop(crop);
     setModalMode('edit');
   };
 
-  // Form Validation
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
     if (!formName.trim()) errors.name = 'Crop name is required';
@@ -130,53 +113,43 @@ export const Crops: React.FC = () => {
     return Object.keys(errors).length === 0;
   };
 
-  // Handle Form Submit
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    const payload = {
+      name: formName.trim(),
+      variety: formVariety.trim(),
+      growthDurationDays: Number(formDuration),
+      waterRequirementLpd: Number(formWater),
+      idealMoistureMin: Number(formMoistureMin),
+      idealMoistureMax: Number(formMoistureMax),
+      idealTempMin: Number(formTempMin),
+      idealTempMax: Number(formTempMax),
+      idealPhMin: Number(formPhMin),
+      idealPhMax: Number(formPhMax),
+      gddBaseTemp: Number(formGddBase) || 10
+    };
+
     if (modalMode === 'add') {
-      const created = addCrop({
-        name: formName.trim(),
-        variety: formVariety.trim(),
-        growthDurationDays: Number(formDuration),
-        waterRequirementLpd: Number(formWater),
-        idealMoistureMin: Number(formMoistureMin),
-        idealMoistureMax: Number(formMoistureMax),
-        idealTempMin: Number(formTempMin),
-        idealTempMax: Number(formTempMax),
-        idealPhMin: Number(formPhMin),
-        idealPhMax: Number(formPhMax)
-      });
-      setModalMode(null);
-      showToast(`Crop "${created.name} (${created.variety})" registered successfully!`);
+      const created = addCrop(payload);
+      showToast(`Added cultivar '${created.name} (${created.variety})' to Crop Library.`);
     } else if (modalMode === 'edit' && editingCrop) {
-      const updated: Crop = {
+      updateCrop({
         ...editingCrop,
-        name: formName.trim(),
-        variety: formVariety.trim(),
-        growthDurationDays: Number(formDuration),
-        waterRequirementLpd: Number(formWater),
-        idealMoistureMin: Number(formMoistureMin),
-        idealMoistureMax: Number(formMoistureMax),
-        idealTempMin: Number(formTempMin),
-        idealTempMax: Number(formTempMax),
-        idealPhMin: Number(formPhMin),
-        idealPhMax: Number(formPhMax)
-      };
-      updateCrop(updated);
-      setModalMode(null);
-      showToast(`Crop "${updated.name}" updated successfully!`);
+        ...payload
+      });
+      showToast(`Updated '${editingCrop.name} (${editingCrop.variety})' biophysical thresholds.`);
     }
+
+    setModalMode(null);
   };
 
-  // Handle Delete Confirmation
-  const confirmDelete = () => {
+  const confirmDeleteCrop = () => {
     if (!cropToDelete) return;
-    const deletedName = cropToDelete.name;
     deleteCrop(cropToDelete.id);
+    showToast(`Deleted crop cultivar '${cropToDelete.name}'. Assigned sections reverted to Fallow.`);
     setCropToDelete(null);
-    showToast(`Crop "${deletedName}" deleted and safely unbound from any assigned plots.`);
   };
 
   const filteredCrops = crops.filter(c => 
@@ -185,429 +158,285 @@ export const Crops: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6 text-slate-800 font-sans pb-10">
-      
-      {/* ================= HEADER & CRUD CONTROLS ================= */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-6 max-w-7xl mx-auto space-y-6 font-sans text-slate-800 pb-10">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs font-bold flex items-center space-x-2 animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center space-x-3.5">
-          <div className="w-12 h-12 rounded-xl bg-emerald-800 flex items-center justify-center text-white shadow-sm ring-2 ring-emerald-600/20 shrink-0">
-            <Sprout className="w-6 h-6 text-emerald-200" />
+          <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+            <Sprout className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center space-x-2.5">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-                Crop & Cultivar Library
-              </h1>
-              <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                {crops.length} Registered
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Manage vegetative parameters, biophysical thresholds, and water requirements
+            <h1 className="text-xl font-bold text-slate-900">Crop Cultivar Library</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Manage agronomic cultivars, growth cycles, and GDD biophysical thresholds across the digital twin.
             </p>
           </div>
         </div>
 
         <button
           onClick={openAddModal}
-          className="flex items-center space-x-2 px-4 py-2.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm hover:shadow-md transition-all cursor-pointer"
+          className="flex items-center space-x-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>Add New Crop</span>
+          <span>+ Add New Cultivar</span>
         </button>
       </div>
 
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 flex items-center space-x-2 animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* ================= SEARCH & FILTER BAR ================= */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex items-center">
-        <div className="relative w-full max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search crop name or variety (e.g. Tomato, Sarpan)..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-800 transition-all"
-          />
-        </div>
+      {/* Search Bar */}
+      <div className="relative max-w-md">
+        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+        <input
+          type="text"
+          placeholder="Search by crop name or variety..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 shadow-xs"
+        />
       </div>
 
-      {/* ================= CROPS DATA TABLE ================= */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
-              <tr>
-                <th className="px-5 py-3.5">Crop & Cultivar</th>
-                <th className="px-4 py-3.5">Growth Cycle</th>
-                <th className="px-4 py-3.5">Water Requirement</th>
-                <th className="px-4 py-3.5">Ideal Soil Moisture</th>
-                <th className="px-4 py-3.5">Optimal Temp</th>
-                <th className="px-4 py-3.5">Soil pH</th>
-                <th className="px-4 py-3.5">Assigned Beds</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-              {filteredCrops.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-slate-400">
-                    No crops found matching your search. Click "+ Add New Crop" to register one.
-                  </td>
-                </tr>
-              ) : (
-                filteredCrops.map((crop) => {
-                  const assignedPlotCodes = plots
-                    .filter(p => p.cropId === crop.id)
-                    .map(p => p.code);
+      {/* Crops Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {filteredCrops.map(crop => {
+          const activeSectionsCount = activeSections.filter(s => s.cropId === crop.id).length;
 
-                  return (
-                    <tr key={crop.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* Crop Name & Variety */}
-                      <td className="px-5 py-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center justify-center font-bold">
-                            <Sprout className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="font-bold text-slate-900 text-sm">{crop.name}</div>
-                            <div className="text-[11px] text-slate-500 font-medium">{crop.variety}</div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Growth Cycle */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center space-x-1.5 font-semibold text-slate-700">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{crop.growthDurationDays} days</span>
-                        </div>
-                      </td>
-
-                      {/* Water Req */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center space-x-1.5 font-semibold text-slate-700">
-                          <Droplets className="w-3.5 h-3.5 text-sky-600" />
-                          <span>{crop.waterRequirementLpd} L/day</span>
-                        </div>
-                      </td>
-
-                      {/* Soil Moisture */}
-                      <td className="px-4 py-4">
-                        <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 font-semibold border border-sky-200 text-[11px]">
-                          {crop.idealMoistureMin}% - {crop.idealMoistureMax}%
-                        </span>
-                      </td>
-
-                      {/* Optimal Temp */}
-                      <td className="px-4 py-4">
-                        <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-semibold border border-rose-200 text-[11px]">
-                          {crop.idealTempMin}°C - {crop.idealTempMax}°C
-                        </span>
-                      </td>
-
-                      {/* Soil pH */}
-                      <td className="px-4 py-4">
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200 text-[11px]">
-                          {crop.idealPhMin} - {crop.idealPhMax}
-                        </span>
-                      </td>
-
-                      {/* Assigned Beds */}
-                      <td className="px-4 py-4">
-                        {assignedPlotCodes.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {assignedPlotCodes.map(code => (
-                              <span key={code} className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono text-[10px] font-bold">
-                                {code}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 italic">Unassigned</span>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-5 py-4 text-right">
-                        <div className="flex items-center justify-end space-x-1.5">
-                          <button
-                            onClick={() => openEditModal(crop)}
-                            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-                            title="Edit Crop"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setCropToDelete(crop)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                            title="Delete Crop"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ================= ADD / EDIT CROP MODAL ================= */}
-      {modalMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
-            
-            <div className="bg-slate-900 px-6 py-4 text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-800 flex items-center justify-center text-emerald-100">
-                  <Sprout className="w-4 h-4" />
-                </div>
+          return (
+            <div key={crop.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4 hover:border-emerald-200 transition-all">
+              <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-white">
-                    {modalMode === 'add' ? 'Register New Crop Variety' : `Edit Crop: ${editingCrop?.name}`}
-                  </h3>
-                  <p className="text-[11px] text-slate-400">Biophysical parameters for digital twin simulation</p>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    {crop.variety}
+                  </span>
+                  <h3 className="text-lg font-black text-slate-900 mt-1">{crop.name}</h3>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => openEditModal(crop)}
+                    className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setCropToDelete(crop)}
+                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-              <button 
-                onClick={() => setModalMode(null)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Threshold Grid */}
+              <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100 font-medium">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Cycle & GDD Base</span>
+                  <span className="font-bold text-slate-800">{crop.growthDurationDays} Days ({crop.gddBaseTemp || 10}°C Base)</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Water Requirement</span>
+                  <span className="font-bold text-slate-800">{crop.waterRequirementLpd} L/day</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Ideal Moisture</span>
+                  <span className="font-bold text-sky-700">{crop.idealMoistureMin}%–{crop.idealMoistureMax}%</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Ideal Temp Range</span>
+                  <span className="font-bold text-amber-700">{crop.idealTempMin}°C–{crop.idealTempMax}°C</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+                <span className="text-slate-500 font-medium">Assigned Sections:</span>
+                <span className="font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                  {activeSectionsCount} Sections
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add / Edit Crop Modal */}
+      {modalMode && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200 relative">
+            <button
+              onClick={() => setModalMode(null)}
+              className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+                <Sprout className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {modalMode === 'add' ? 'Add Crop Cultivar' : `Edit ${editingCrop?.name}`}
+                </h3>
+                <p className="text-xs text-slate-500">Configure agronomic limits for biophysical evaluations</p>
+              </div>
             </div>
 
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
-              
+            <form onSubmit={handleFormSubmit} className="space-y-4 pt-2">
               <div className="grid grid-cols-2 gap-3">
-                {/* Crop Name */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Crop Name <span className="text-rose-500">*</span>
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Crop Name *</label>
                   <input
                     type="text"
+                    required
+                    placeholder="e.g. Tomato"
                     value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="e.g. Tomato, Spinach"
-                    className={`w-full px-3 py-2 bg-slate-50 rounded-xl border text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-800 ${
-                      formErrors.name ? 'border-rose-400' : 'border-slate-200'
-                    }`}
+                    onChange={e => setFormName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-emerald-500"
                   />
-                  {formErrors.name && <p className="text-rose-600 text-[10px] mt-0.5">{formErrors.name}</p>}
                 </div>
-
-                {/* Variety */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Cultivar / Variety <span className="text-rose-500">*</span>
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Cultivar / Variety *</label>
                   <input
                     type="text"
-                    value={formVariety}
-                    onChange={(e) => setFormVariety(e.target.value)}
+                    required
                     placeholder="e.g. Sarpan F1-STH-520"
-                    className={`w-full px-3 py-2 bg-slate-50 rounded-xl border text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-800 ${
-                      formErrors.variety ? 'border-rose-400' : 'border-slate-200'
-                    }`}
+                    value={formVariety}
+                    onChange={e => setFormVariety(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-emerald-500"
                   />
-                  {formErrors.variety && <p className="text-rose-600 text-[10px] mt-0.5">{formErrors.variety}</p>}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                {/* Growth Duration */}
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Growth Duration (Days) <span className="text-rose-500">*</span>
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Cycle (Days)</label>
                   <input
                     type="number"
-                    min="1"
                     value={formDuration}
-                    onChange={(e) => setFormDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="e.g. 90"
-                    className={`w-full px-3 py-2 bg-slate-50 rounded-xl border text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-800 ${
-                      formErrors.duration ? 'border-rose-400' : 'border-slate-200'
-                    }`}
+                    onChange={e => setFormDuration(parseFloat(e.target.value) || '')}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-emerald-500"
                   />
                 </div>
-
-                {/* Water Requirement */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Water Need (L/day) <span className="text-rose-500">*</span>
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Water (L/day)</label>
                   <input
                     type="number"
                     step="0.1"
-                    min="0"
                     value={formWater}
-                    onChange={(e) => setFormWater(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="e.g. 4.5"
-                    className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-800"
+                    onChange={e => setFormWater(parseFloat(e.target.value) || '')}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">GDD Base (°C)</label>
+                  <input
+                    type="number"
+                    value={formGddBase}
+                    onChange={e => setFormGddBase(parseFloat(e.target.value) || '')}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-emerald-500"
                   />
                 </div>
               </div>
 
-              {/* Moisture Min/Max */}
-              <div className="p-3.5 bg-sky-50/60 rounded-xl border border-sky-100 space-y-2">
-                <div className="flex items-center space-x-1.5 text-sky-900 font-bold text-xs">
-                  <Droplets className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Ideal Soil Moisture Boundaries (%)</span>
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Min Soil Moisture (%)</label>
+                  <input
+                    type="number"
+                    value={formMoistureMin}
+                    onChange={e => setFormMoistureMin(parseFloat(e.target.value) || '')}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none"
+                  />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Min Moisture (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formMoistureMin}
-                      onChange={(e) => setFormMoistureMin(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-medium text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Max Moisture (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formMoistureMax}
-                      onChange={(e) => setFormMoistureMax(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-medium text-slate-900"
-                    />
-                  </div>
-                </div>
-                {formErrors.moisture && <p className="text-rose-600 text-[10px]">{formErrors.moisture}</p>}
-              </div>
-
-              {/* Temperature & pH */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Temp */}
-                <div className="p-3.5 bg-rose-50/60 rounded-xl border border-rose-100 space-y-2">
-                  <div className="flex items-center space-x-1.5 text-rose-900 font-bold text-xs">
-                    <Thermometer className="w-3.5 h-3.5 text-rose-500" />
-                    <span>Ideal Temp (°C)</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="number"
-                      value={formTempMin}
-                      onChange={(e) => setFormTempMin(e.target.value === '' ? '' : Number(e.target.value))}
-                      placeholder="Min"
-                      className="w-full px-2.5 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-medium text-slate-900"
-                    />
-                    <input
-                      type="number"
-                      value={formTempMax}
-                      onChange={(e) => setFormTempMax(e.target.value === '' ? '' : Number(e.target.value))}
-                      placeholder="Max"
-                      className="w-full px-2.5 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-medium text-slate-900"
-                    />
-                  </div>
-                </div>
-
-                {/* pH */}
-                <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-100 space-y-2">
-                  <div className="flex items-center space-x-1.5 text-emerald-900 font-bold text-xs">
-                    <Gauge className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Ideal Soil pH</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formPhMin}
-                      onChange={(e) => setFormPhMin(e.target.value === '' ? '' : Number(e.target.value))}
-                      placeholder="Min"
-                      className="w-full px-2.5 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-medium text-slate-900"
-                    />
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formPhMax}
-                      onChange={(e) => setFormPhMax(e.target.value === '' ? '' : Number(e.target.value))}
-                      placeholder="Max"
-                      className="w-full px-2.5 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-medium text-slate-900"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Max Soil Moisture (%)</label>
+                  <input
+                    type="number"
+                    value={formMoistureMax}
+                    onChange={e => setFormMoistureMax(parseFloat(e.target.value) || '')}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none"
+                  />
                 </div>
               </div>
 
-              {/* Modal Actions */}
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2.5">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Min Air Temp (°C)</label>
+                  <input
+                    type="number"
+                    value={formTempMin}
+                    onChange={e => setFormTempMin(parseFloat(e.target.value) || '')}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Max Air Temp (°C)</label>
+                  <input
+                    type="number"
+                    value={formTempMax}
+                    onChange={e => setFormTempMax(parseFloat(e.target.value) || '')}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setModalMode(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all"
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20"
                 >
-                  {modalMode === 'add' ? 'Save Crop Variety' : 'Update Crop Variety'}
+                  {modalMode === 'add' ? 'Save Cultivar' : 'Update Thresholds'}
                 </button>
               </div>
-
             </form>
           </div>
         </div>
       )}
 
-      {/* ================= DELETE CONFIRMATION MODAL ================= */}
+      {/* Delete Confirmation Modal */}
       {cropToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center space-x-3 text-rose-600">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Delete Crop Variety</h3>
-                <p className="text-xs text-slate-500">This action cannot be undone.</p>
-              </div>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 border border-slate-200 text-center">
+            <div className="w-12 h-12 mx-auto rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
+              <AlertCircle className="w-6 h-6" />
             </div>
-
-            <p className="text-xs text-slate-600">
-              Are you sure you want to delete <strong className="text-slate-900">{cropToDelete.name} ({cropToDelete.variety})</strong>? 
-              Any plot beds assigned to this crop will automatically revert to <span className="font-semibold text-slate-800">Fallow</span> state.
-            </p>
-
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2.5">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900">Delete Crop Cultivar?</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Are you sure you want to delete <strong className="text-slate-900">{cropToDelete.name} ({cropToDelete.variety})</strong>? Any assigned farmland sections will revert to Fallow.
+              </p>
+            </div>
+            <div className="flex items-center justify-center space-x-3 pt-2">
               <button
                 type="button"
                 onClick={() => setCropToDelete(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={confirmDelete}
-                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm"
+                onClick={confirmDeleteCrop}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md"
               >
-                Confirm Delete
+                Delete Cultivar
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 };

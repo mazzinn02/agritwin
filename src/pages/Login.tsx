@@ -102,6 +102,46 @@ export const Login: React.FC = () => {
             </div>
           )}
 
+          {/* Quick Demo Login Credentials Selector */}
+          <div className="mb-6 bg-slate-900/90 border border-slate-700/80 rounded-2xl p-3.5 space-y-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              1-Click Demo Accounts (Select to Auto-Fill)
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('admin@agritwin.com');
+                  setPassword('admin123');
+                  setError('');
+                }}
+                className="p-2 rounded-xl bg-indigo-950/60 border border-indigo-700/50 hover:bg-indigo-900/60 text-left transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-300">Admin</span>
+                  <span className="text-[9px] font-mono text-indigo-400">admin123</span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate mt-0.5">admin@agritwin.com</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('farmer@agritwin.com');
+                  setPassword('farmer123');
+                  setError('');
+                }}
+                className="p-2 rounded-xl bg-emerald-950/60 border border-emerald-700/50 hover:bg-emerald-900/60 text-left transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-300">Farmer</span>
+                  <span className="text-[9px] font-mono text-emerald-400">farmer123</span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate mt-0.5">farmer@agritwin.com</p>
+              </button>
+            </div>
+          </div>
+
           <form className="space-y-4" onSubmit={handleLogin}>
             <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
@@ -117,7 +157,7 @@ export const Login: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-10 pr-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm transition-all"
-                  placeholder="admin@agritwin.com or farmer@farm.org"
+                  placeholder="admin@agritwin.com or farmer@agritwin.com"
                 />
               </div>
             </div>

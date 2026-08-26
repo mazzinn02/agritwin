@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   BrainCircuit, 
   AlertTriangle, 
@@ -17,37 +17,17 @@ import {
   Check,
   Sprout
 } from 'lucide-react';
-import { useUserMode } from '../context/UserModeContext';
-import { getPlots, getCrops, triggerPlotIrrigation, updatePlot } from '../lib/farm-storage';
-import { logFieldAction } from '../lib/audit-log';
-import { PlotBed, Crop } from '../types';
+import { useAgriStore } from '../context/AgriStore';
+import { DataSourceBadge } from '../components/common/DataSourceBadge';
+import { PrototypeModeBanner } from '../components/common/PrototypeModeBanner';
 
-export const AIAdvisor = () => {
-  const { isFarmer } = useUserMode();
-  const [plots, setPlots] = useState<PlotBed[]>([]);
-  const [crops, setCrops] = useState<Crop[]>([]);
-  const [selectedPlotId, setSelectedPlotId] = useState<string>('');
+export const AIAdvisor: React.FC = () => {
+  const { activeSections: plots, crops, activeFarmland, triggerActuator } = useAgriStore();
+  const [selectedPlotId, setSelectedPlotId] = useState<string>(plots[0]?.id || '');
   const [question, setQuestion] = useState('');
   const [doctorAnswer, setDoctorAnswer] = useState<string | null>(null);
   const [answering, setAnswering] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-
-  const reloadData = () => {
-    const p = getPlots();
-    const c = getCrops();
-    setPlots(p);
-    setCrops(c);
-    if (p.length > 0) {
-      setSelectedPlotId(prev => (prev && p.some(item => item.id === prev)) ? prev : p[0].id);
-    }
-  };
-
-  useEffect(() => {
-    reloadData();
-    const handleUpdate = () => reloadData();
-    window.addEventListener('agri_storage_updated', handleUpdate);
-    return () => window.removeEventListener('agri_storage_updated', handleUpdate);
-  }, []);
 
   const activePlot = useMemo(() => {
     return plots.find(p => p.id === selectedPlotId) || plots[0] || null;
@@ -58,261 +38,169 @@ export const AIAdvisor = () => {
     return crops.find(c => c.id === activePlot.cropId) || null;
   }, [activePlot, crops]);
 
-  // Dynamic Diagnosis & Prescription
-  const diagnosis = useMemo(() => {
-    if (!activePlot) {
-      return {
-        title: 'No Plot Selected',
-        verdict: 'Standby for field telemetry.',
-        healthScore: 100,
-        yieldPotential: 100,
-        recommendations: []
-      };
-    }
+  const handleAskDoctor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!question.trim() || !activePlot) return;
 
-    const minMoisture = assignedCrop?.idealMoistureMin || 50;
-    const maxMoisture = assignedCrop?.idealMoistureMax || 75;
-    const minTemp = assignedCrop?.idealTempMin || 18;
-    const maxTemp = assignedCrop?.idealTempMax || 30;
-
-    const issues: { title: string; solution: string; actionType: 'water' | 'fan' | 'dosing'; actionLabel: string }[] = [];
-
-    if (activePlot.soilMoisture < minMoisture) {
-      issues.push({
-        title: `Low Soil Moisture (${activePlot.soilMoisture}% vs Target ${minMoisture}-${maxMoisture}%)`,
-        solution: `Root zone moisture is depleted. Transpiration rate requires a 15-minute drip irrigation replenishment pulse.`,
-        actionType: 'water',
-        actionLabel: 'Trigger 15-Min Irrigation Pulse'
-      });
-    }
-
-    if (activePlot.airTemp > maxTemp) {
-      issues.push({
-        title: `High Canopy Thermal Stress (${activePlot.airTemp}°C vs Max ${maxTemp}°C)`,
-        solution: `Canopy ambient heat is elevating vapor pressure deficit. Turn on overhead shade fans to stabilize leaf temperature.`,
-        actionType: 'fan',
-        actionLabel: 'Turn On Canopy Ventilation Fan'
-      });
-    }
-
-    const isOptimal = issues.length === 0;
-    const healthScore = isOptimal ? 96 : activePlot.airTemp > maxTemp && activePlot.soilMoisture < minMoisture ? 68 : 78;
-    const yieldPotential = isOptimal ? 94 : 82;
-
-    return {
-      title: isOptimal ? 'Optimal Micro-Climate & Growth Equilibrium' : 'Micro-Climate Attention Recommended',
-      verdict: isOptimal 
-        ? `All environmental and root zone parameters for ${assignedCrop ? `${assignedCrop.name} (${assignedCrop.variety})` : activePlot.code} are aligned with optimal genetic potential.` 
-        : `Agronomic deviations detected on ${activePlot.code}. Follow the recommended corrective actuations below.`,
-      healthScore,
-      yieldPotential,
-      recommendations: issues
-    };
-  }, [activePlot, assignedCrop]);
-
-  const handleAskDoctor = (queryText: string) => {
     setAnswering(true);
-    setQuestion(queryText);
     setTimeout(() => {
+      setDoctorAnswer(
+        `Agronomic Rule Assessment for ${activePlot.code} (${assignedCrop?.name || 'Crop'}): Based on current observation (Soil Moisture ${activePlot.soilMoisture}%, Temp ${activePlot.airTemp}°C, pH ${activePlot.soilPh}), maintain steady canopy ventilation and pulse irrigation.`
+      );
       setAnswering(false);
-      const cropName = assignedCrop ? assignedCrop.name : 'crop';
-      if (queryText.toLowerCase().includes('yellow')) {
-        setDoctorAnswer(`Yellowing leaves on ${cropName} indicate early Nitrogen deficiency combined with minor over-watering. Suggested action: Apply water-soluble NPK balanced nutrient formulation and verify moisture targets.`);
-      } else if (queryText.toLowerCase().includes('harvest')) {
-        setDoctorAnswer(`Based on GDD thermal accumulation and Day ${activePlot?.daysPlanted || 1} pace, your ${cropName} will reach optimal harvest maturity in ~${Math.max(1, (assignedCrop?.growthDurationDays || 90) - (activePlot?.daysPlanted || 1))} days.`);
-      } else {
-        setDoctorAnswer(`Micro-climate parameters for ${activePlot?.code || 'Plot'} (${cropName}) are currently evaluated against calibrated cultivar thresholds. Current moisture is ${activePlot?.soilMoisture}%, Air Temp is ${activePlot?.airTemp}°C.`);
-      }
     }, 600);
   };
 
-  const handle1TapAction = async (actionType: 'water' | 'fan' | 'dosing') => {
+  const handleAction = async (type: 'irrigation' | 'hvac') => {
     if (!activePlot) return;
-    if (actionType === 'water') {
-      await triggerPlotIrrigation(activePlot.id);
-      setActionSuccess(`15-Minute Drip Irrigation executed on ${activePlot.code}. Moisture updated (+8.5%).`);
-    } else if (actionType === 'fan') {
-      const nextFan = !activePlot.hvacActive;
-      updatePlot({ ...activePlot, hvacActive: nextFan });
-      await logFieldAction(
-        activePlot.id,
-        'hvac',
-        'manual',
-        `AI Advisor: Toggled canopy ventilation fan ${nextFan ? 'ON' : 'OFF'} on ${activePlot.code}.`,
-        activePlot.code
-      );
-      setActionSuccess(`Canopy Ventilation Fan toggled ${nextFan ? 'ON' : 'OFF'} for ${activePlot.code}.`);
-    } else {
-      setActionSuccess('Nutrient dosing scheduled in field automation schedule.');
-    }
-    setTimeout(() => setActionSuccess(null), 3500);
+    await triggerActuator(activePlot.id, type, 'manual');
+    setActionSuccess(`Action executed on ${activePlot.code}: ${type === 'irrigation' ? 'Pulse Irrigation Triggered' : 'Canopy Fans Activated'}.`);
+    setTimeout(() => setActionSuccess(null), 4000);
   };
 
   return (
     <div className="space-y-6 text-slate-800 font-sans pb-10">
-      
-      {/* Top Header & Plot Picker */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-black text-slate-900 flex items-center">
-            <BrainCircuit className="mr-3 text-sky-600 w-8 h-8" />
-            AI Crop Doctor & Advisor
-          </h2>
-          <p className="text-slate-500 text-sm mt-1 font-medium">
-            {isFarmer 
-              ? 'Plain-English diagnosis & 1-tap actionable solutions for field operations' 
-              : 'Genotype-grounded intelligence & biophysical micro-climate recommendations'}
-          </p>
-        </div>
+      <PrototypeModeBanner />
 
-        <div className="bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Plot:</span>
-          <select 
-            value={selectedPlotId} 
-            onChange={(e) => setSelectedPlotId(e.target.value)}
-            className="bg-slate-50 text-slate-900 text-xs font-bold rounded-xl px-3 py-1.5 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
-          >
-            {plots.map(p => {
-              const c = crops.find(crop => crop.id === p.cropId);
-              return (
-                <option key={p.id} value={p.id}>
-                  {p.code}: {c ? `${c.name} (${c.variety})` : p.name}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-      </div>
-
-      {actionSuccess && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-800 flex items-center space-x-2 animate-in fade-in">
-          <Check className="w-4 h-4 text-emerald-600" />
-          <span>{actionSuccess}</span>
-        </div>
-      )}
-
-      {/* Hero Recommendation Card */}
-      <div className="bg-gradient-to-br from-emerald-800 to-teal-900 text-white rounded-3xl p-8 shadow-md relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex items-center space-x-2">
-              <span className="p-1.5 bg-white/20 rounded-lg backdrop-blur-md">
-                <Sparkles className="w-4 h-4 text-amber-300" />
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-100">
-                Live Crop Doctor Diagnosis ({activePlot?.code || 'Active Bed'})
-              </span>
-            </div>
-            <h3 className="text-2xl font-black">{diagnosis.title}</h3>
-            <p className="text-sm text-emerald-50 leading-relaxed font-medium">
-              {diagnosis.verdict}
-            </p>
-          </div>
-
-          <div className="flex items-center space-x-6 bg-white/10 backdrop-blur-md px-6 py-4 rounded-2xl border border-white/20 self-start md:self-auto">
-            <div>
-              <div className="text-[10px] text-emerald-100 uppercase font-bold tracking-wider">Health Score</div>
-              <div className="text-3xl font-black">{diagnosis.healthScore}%</div>
-            </div>
-            <div className="h-8 w-px bg-white/20" />
-            <div>
-              <div className="text-[10px] text-emerald-100 uppercase font-bold tracking-wider">Yield Potential</div>
-              <div className="text-3xl font-black">{diagnosis.yieldPotential}%</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Dynamic Prescriptions with 1-Tap Actuation Buttons */}
-      {diagnosis.recommendations.length > 0 && (
-        <div className="bg-white rounded-3xl p-6 border border-amber-200 bg-amber-50/40 shadow-xs space-y-4">
-          <div className="flex items-center space-x-2 text-amber-800 font-bold text-sm">
-            <AlertTriangle className="w-5 h-5 text-amber-600" />
-            <span>Active Agronomic Prescriptions for {activePlot?.code}</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {diagnosis.recommendations.map((rec, i) => (
-              <div key={i} className="bg-white p-5 rounded-2xl border border-amber-200 shadow-xs flex flex-col justify-between space-y-3">
-                <div className="space-y-1">
-                  <h4 className="text-xs font-extrabold text-slate-900">{rec.title}</h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">{rec.solution}</p>
-                </div>
-
-                <button
-                  onClick={() => handle1TapAction(rec.actionType)}
-                  className="w-full py-2.5 px-4 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
-                >
-                  {rec.actionType === 'water' ? <Droplet className="w-4 h-4" /> : <Wind className="w-4 h-4" />}
-                  <span>{rec.actionLabel}</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Plain English AI Crop Doctor Question Box */}
-      <div className="bg-white/95 backdrop-blur-sm p-6 rounded-3xl shadow-sm border border-slate-200/80 space-y-4">
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 bg-sky-50 text-sky-600 rounded-xl border border-sky-200">
-            <Bot className="w-5 h-5" />
+      {/* Top Banner Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
+        <div className="flex items-center space-x-3.5">
+          <div className="p-3 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100">
+            <BrainCircuit className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-base font-extrabold text-slate-900">Ask the AI Crop Doctor</h3>
-            <p className="text-xs text-slate-500 font-medium">Ask any field question in plain English (e.g. leaf discoloration, watering frequency)</p>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-xl font-bold text-slate-900">AI Agronomic Advisor & Biophysical Diagnostics</h1>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                RULE-BASED ASSESSMENT
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Genotype-aware micro-climate validation & agronomic advice computed from actual plot observations.
+            </p>
           </div>
         </div>
 
-        {/* Question Input Form */}
-        <div className="flex items-center space-x-2">
-          <input 
-            type="text"
-            placeholder="Type a question (e.g. 'Why are my leaves yellowing?', 'When is the best harvest time?')..."
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && question && handleAskDoctor(question)}
-            className="flex-1 bg-slate-50 border border-slate-300 rounded-2xl px-4 py-3 text-xs font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-sky-500 shadow-inner"
-          />
-          <button
-            onClick={() => handleAskDoctor(question || 'Why are my leaves yellowing?')}
-            disabled={answering}
-            className="p-3 bg-sky-600 hover:bg-sky-700 text-white rounded-2xl transition-all shadow-xs cursor-pointer active:scale-95"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Quick Question Prompt Chips */}
-        <div className="flex flex-wrap gap-2 pt-1">
-          <span className="text-xs text-slate-400 font-bold self-center mr-1">Try asking:</span>
-          {[
-            `Why are my ${assignedCrop?.name || 'crop'} leaves turning yellow?`,
-            `When is the best time to harvest ${activePlot?.code || 'this plot'}?`,
-            `How much water does ${activePlot?.code || 'this plot'} need today?`
-          ].map((prompt, i) => (
-            <button
-              key={i}
-              onClick={() => handleAskDoctor(prompt)}
-              className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-xl transition-colors cursor-pointer"
+        {/* Plot Selector */}
+        {plots.length > 0 && (
+          <div className="bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl flex items-center space-x-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Plot:</span>
+            <select
+              value={selectedPlotId}
+              onChange={e => setSelectedPlotId(e.target.value)}
+              className="bg-white text-slate-900 text-xs font-bold rounded-lg px-3 py-1 border border-slate-200 outline-none cursor-pointer"
             >
-              {prompt}
-            </button>
-          ))}
-        </div>
-
-        {/* AI Doctor Answer Output Box */}
-        {doctorAnswer && (
-          <div className="bg-sky-50/80 border border-sky-200 rounded-2xl p-5 space-y-2 animate-in fade-in">
-            <div className="flex items-center space-x-2 text-sky-800 font-bold text-xs">
-              <Sparkles className="w-4 h-4 text-sky-600" />
-              <span>AI Crop Doctor Prescription:</span>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed font-medium">{doctorAnswer}</p>
+              {plots.map(p => {
+                const c = crops.find(crop => crop.id === p.cropId);
+                return (
+                  <option key={p.id} value={p.id}>{p.code}: {c ? c.name : p.name}</option>
+                );
+              })}
+            </select>
           </div>
         )}
       </div>
 
+      {actionSuccess && (
+        <div className="p-4 bg-emerald-950 text-emerald-300 rounded-2xl border border-emerald-800 text-xs font-bold flex items-center space-x-2">
+          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{actionSuccess}</span>
+        </div>
+      )}
+
+      {activePlot ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Current Plot Telemetry Assessment Card */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-purple-600 tracking-wider">Current Plot State</span>
+                <h3 className="text-lg font-black text-slate-900">{activePlot.code}: {assignedCrop?.name || 'Fallow'}</h3>
+              </div>
+              <DataSourceBadge source="MANUAL_PROTOTYPE" />
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl">
+                <span className="font-semibold text-slate-500">Soil Moisture:</span>
+                <span className="font-black text-slate-900">{activePlot.soilMoisture}% (Target: {assignedCrop?.idealMoistureMin || 50}%–{assignedCrop?.idealMoistureMax || 75}%)</span>
+              </div>
+              <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl">
+                <span className="font-semibold text-slate-500">Air Temperature:</span>
+                <span className="font-black text-slate-900">{activePlot.airTemp}°C (Target: {assignedCrop?.idealTempMin || 20}°C–{assignedCrop?.idealTempMax || 28}°C)</span>
+              </div>
+              <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl">
+                <span className="font-semibold text-slate-500">Soil pH:</span>
+                <span className="font-black text-slate-900">{activePlot.soilPh} (Target: {assignedCrop?.idealPhMin || 6.0}–{assignedCrop?.idealPhMax || 6.8})</span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex gap-2">
+              <button
+                onClick={() => handleAction('irrigation')}
+                className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1"
+              >
+                <Droplet className="w-3.5 h-3.5" />
+                <span>Irrigate Plot</span>
+              </button>
+              <button
+                onClick={() => handleAction('hvac')}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1"
+              >
+                <Wind className="w-3.5 h-3.5" />
+                <span>Toggle Fan</span>
+              </button>
+            </div>
+          </div>
+
+          {/* AI Agronomic Query & Diagnostics Console */}
+          <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center space-x-2 border-b border-slate-100 pb-3 mb-4">
+                <Bot className="w-5 h-5 text-purple-600" />
+                <h3 className="text-base font-bold text-slate-900">Ask Agronomic AI Assistant</h3>
+              </div>
+
+              <form onSubmit={handleAskDoctor} className="space-y-3">
+                <textarea
+                  rows={3}
+                  value={question}
+                  onChange={e => setQuestion(e.target.value)}
+                  placeholder={`Ask a question about ${activePlot.code} (${assignedCrop?.name || 'Crop'}). e.g. "What is the recommended irrigation schedule for current moisture levels?"`}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-900 outline-none focus:border-purple-500 transition-all resize-none"
+                />
+
+                <button
+                  type="submit"
+                  disabled={answering || !question.trim()}
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shadow-md shadow-purple-600/20"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{answering ? 'Analyzing Observations...' : 'Submit Query'}</span>
+                </button>
+              </form>
+
+              {doctorAnswer && (
+                <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-2xl text-xs text-purple-950 font-medium animate-fadeIn space-y-2">
+                  <div className="flex items-center space-x-1.5 text-purple-800 font-bold">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <span>AI Agronomic Guidance (Rule-Based Assessment):</span>
+                  </div>
+                  <p className="leading-relaxed">{doctorAnswer}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 bg-slate-100 rounded-xl text-[11px] text-slate-500 font-semibold">
+              Note: Diagnostics are driven by authoritative observations in AgriStore and agronomic thresholds.
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 text-xs font-bold">
+          No plots created yet. Please create a farm and plots to use AI Advisor.
+        </div>
+      )}
     </div>
   );
 };

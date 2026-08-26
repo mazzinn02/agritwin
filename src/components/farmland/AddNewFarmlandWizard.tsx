@@ -12,12 +12,12 @@ import {
   Save, 
   Sparkles,
   Info,
-  X
+  X,
+  Plus
 } from 'lucide-react';
 import { AreaUnitInput, AreaUnit } from '../common/AreaUnitInput';
 import { VisualPlotPreview, SectionAssignment } from './VisualPlotPreview';
-import { getCrops, addPlot, saveFarmProfile, convertAreaToSqm } from '../../lib/farm-storage';
-import { saveFarmRecord, saveSectionPlotRecord } from '../../lib/firebase';
+import { useAgriStore } from '../../context/AgriStore';
 import { Crop, PlotBed } from '../../types';
 
 interface AddNewFarmlandWizardProps {
@@ -25,63 +25,9 @@ interface AddNewFarmlandWizardProps {
   isModal?: boolean;
 }
 
-const DEFAULT_SARPAN_CROPS: Crop[] = [
-  {
-    id: 'crop_sarpan_maize',
-    name: 'Sarpan Hybrid Maize',
-    variety: 'Sarpan 555 Gold',
-    growthDurationDays: 110,
-    waterRequirementLpd: 5.5,
-    idealMoistureMin: 55,
-    idealMoistureMax: 80,
-    idealTempMin: 20,
-    idealTempMax: 32,
-    idealPhMin: 6.0,
-    idealPhMax: 7.2
-  },
-  {
-    id: 'crop_sarpan_tomato',
-    name: 'Sarpan Hybrid Tomato',
-    variety: 'Sarpan Red Gem',
-    growthDurationDays: 90,
-    waterRequirementLpd: 4.2,
-    idealMoistureMin: 60,
-    idealMoistureMax: 85,
-    idealTempMin: 18,
-    idealTempMax: 30,
-    idealPhMin: 6.0,
-    idealPhMax: 6.8
-  },
-  {
-    id: 'crop_sarpan_cotton',
-    name: 'Sarpan Bt Cotton',
-    variety: 'Sarpan Super Boll',
-    growthDurationDays: 150,
-    waterRequirementLpd: 6.8,
-    idealMoistureMin: 50,
-    idealMoistureMax: 75,
-    idealTempMin: 22,
-    idealTempMax: 35,
-    idealPhMin: 6.5,
-    idealPhMax: 7.5
-  },
-  {
-    id: 'crop_sarpan_wheat',
-    name: 'Sarpan Winter Wheat',
-    variety: 'Sarpan Sharbati',
-    growthDurationDays: 120,
-    waterRequirementLpd: 4.0,
-    idealMoistureMin: 50,
-    idealMoistureMax: 70,
-    idealTempMin: 15,
-    idealTempMax: 26,
-    idealPhMin: 6.2,
-    idealPhMax: 7.0
-  }
-];
-
 export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onClose, isModal = false }) => {
   const navigate = useNavigate();
+  const { crops: storeCrops, addFarmland } = useAgriStore();
 
   // Multi-step state
   const [step, setStep] = useState<number>(1);
@@ -97,20 +43,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
 
   // Step 3: Sections Configuration
   const [sections, setSections] = useState<SectionAssignment[]>([]);
-
-  // Available Crops
-  const [allCrops, setAllCrops] = useState<Crop[]>([]);
   const [saving, setSaving] = useState<boolean>(false);
-
-  // Load existing crops or fallback to Sarpan defaults
-  useEffect(() => {
-    const loaded = getCrops();
-    if (loaded && loaded.length > 0) {
-      setAllCrops(loaded);
-    } else {
-      setAllCrops(DEFAULT_SARPAN_CROPS);
-    }
-  }, []);
 
   // Initialize or update section array when sectionCount or totalArea changes
   useEffect(() => {
@@ -122,19 +55,19 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
       for (let i = 0; i < count; i++) {
         const letter = String.fromCharCode(65 + i);
         const existing = prev[i];
-        const defaultCrop = allCrops[i % allCrops.length] || allCrops[0];
+        const defaultCrop = storeCrops[i % storeCrops.length] || null;
 
         updated.push({
           code: existing?.code || `SEC-${letter}`,
           name: existing?.name || `Section ${letter}`,
-          cropId: existing?.cropId || defaultCrop?.id || '',
+          cropId: existing?.cropId !== undefined ? existing.cropId : (defaultCrop ? defaultCrop.id : ''),
           area: existing ? existing.area : equalArea,
           cropObj: existing?.cropObj || defaultCrop
         });
       }
       return updated;
     });
-  }, [sectionCount, totalArea, allCrops]);
+  }, [sectionCount, totalArea, storeCrops]);
 
   // Sum of section areas
   const allocatedSum = useMemo(() => {
@@ -144,6 +77,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
   // Validation discrepancy
   const diff = Number((allocatedSum - totalArea).toFixed(2));
   const isExactMatch = Math.abs(diff) < 0.01 && totalArea > 0;
+  const isUnderAllocated = diff < -0.01;
 
   // Handle Section updates
   const updateSection = (idx: number, field: keyof SectionAssignment, val: any) => {
@@ -152,7 +86,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
       if (clone[idx]) {
         clone[idx] = { ...clone[idx], [field]: val };
         if (field === 'cropId') {
-          const cropObj = allCrops.find(c => c.id === val) || null;
+          const cropObj = storeCrops.find(c => c.id === val) || null;
           clone[idx].cropObj = cropObj;
         }
       }
@@ -160,7 +94,27 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
     });
   };
 
-  // Step 5: Save Farmland & Sections to Firebase & Local Storage
+  // 1-Tap "Auto-Fill Remainder to Fallow" helper
+  const handleAutoFillFallow = () => {
+    if (diff >= 0) return;
+    const remainder = Number((totalArea - allocatedSum).toFixed(2));
+    if (remainder <= 0) return;
+
+    const letter = String.fromCharCode(65 + sections.length);
+    setSections(prev => [
+      ...prev,
+      {
+        code: `SEC-${letter}`,
+        name: `Section ${letter} (Fallow Land)`,
+        cropId: '',
+        area: remainder,
+        cropObj: null
+      }
+    ]);
+    setSectionCount(prev => prev + 1);
+  };
+
+  // Step 5: Save Farmland & Sections to AgriStore & Local Storage (Zero-Hang Synchronous)
   const handleSave = async () => {
     if (!farmName.trim()) {
       alert('Please enter a farmland name');
@@ -175,61 +129,35 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
 
     setSaving(true);
 
-    try {
-      const farmId = `farm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      const farmRecord = {
-        id: farmId,
+    // Save to AgriStore (synchronous localStorage update)
+    addFarmland(
+      {
         name: farmName,
-        location: location || 'Precision Agriculture Sector',
+        location: location || 'Dharwad, Karnataka',
+        address: address || location || 'Dharwad Agriculture Campus',
+        contactPerson: contactPerson || 'Farm Manager',
+        contactPhone: contactPhone || '+91 98765 43210',
+        contactRole,
+        hasMapCoordinates: !skipMap,
         totalArea,
         unit: areaUnit.toLowerCase(),
-        totalAreaSqm: convertAreaToSqm(totalArea, areaUnit.toLowerCase()),
-        sectionsCount: sections.length,
-        createdAt: new Date().toISOString(),
-        onboardingCompleted: true
-      };
+        sectionsCount: sections.length
+      },
+      sections.map(s => ({
+        code: s.code,
+        name: s.name,
+        area: s.area,
+        areaUnit: areaUnit.toLowerCase(),
+        cropId: s.cropId || null
+      }))
+    );
 
-      // 1. Save Farm Profile in Firebase & Local Storage
-      await saveFarmRecord(farmRecord);
-      saveFarmProfile(farmRecord as any);
-
-      // 2. Save each Section as a Plot record in Firebase & Local Storage
-      const createdPlots: PlotBed[] = [];
-      for (let i = 0; i < sections.length; i++) {
-        const sec = sections[i];
-        const plotData = {
-          code: sec.code,
-          name: `${sec.name} (${farmName})`,
-          area: sec.area,
-          areaUnit: areaUnit.toLowerCase(),
-          areaSqm: convertAreaToSqm(sec.area, areaUnit.toLowerCase()),
-          cropId: sec.cropId || null,
-          sensorNodeId: `NODE-${farmId.slice(-4)}-${sec.code}`,
-          sensorId: `NODE-${farmId.slice(-4)}-${sec.code}`,
-          soilMoisture: 62,
-          airTemp: 24,
-          soilPh: 6.5,
-          parLux: 680,
-          daysPlanted: 1,
-          isWatering: false,
-          createdAt: new Date().toISOString()
-        };
-
-        const newPlot = addPlot(plotData as any);
-        await saveSectionPlotRecord({ ...newPlot, farmId });
-        createdPlots.push(newPlot);
-      }
-
+    // 500ms smooth transition then immediate redirect
+    setTimeout(() => {
       setSaving(false);
       if (onClose) onClose();
-      navigate('/');
-    } catch (err) {
-      console.error('Error saving new farmland:', err);
-      setSaving(false);
-      alert('Saved locally. Navigating to Dashboard...');
-      if (onClose) onClose();
-      navigate('/');
-    }
+      navigate('/virtual-farm');
+    }, 500);
   };
 
   return (
@@ -250,7 +178,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
             <Building2 className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Admin Land Provisioning</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Admin Land Provisioning Engine</span>
             <h2 className="text-2xl font-black tracking-tight text-white">Add New Farmland</h2>
           </div>
         </div>
@@ -304,7 +232,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                     type="text"
                     value={farmName}
                     onChange={e => setFarmName(e.target.value)}
-                    placeholder="e.g. Sarpan Valley Tech Farm"
+                    placeholder="e.g. IIIT Agricultural Research Farm"
                     className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-900 font-medium placeholder-slate-400 outline-none transition-all"
                   />
                 </div>
@@ -312,7 +240,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                  Location / Region
+                  Region / City
                 </label>
                 <div className="relative">
                   <MapPin className="w-5 h-5 absolute left-3.5 top-3 text-slate-400" />
@@ -320,15 +248,89 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                     type="text"
                     value={location}
                     onChange={e => setLocation(e.target.value)}
-                    placeholder="e.g. Salinas Valley, Sector A"
+                    placeholder="e.g. Dharwad, Karnataka"
                     className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-900 font-medium placeholder-slate-400 outline-none transition-all"
                   />
                 </div>
               </div>
             </div>
 
+            {/* Full Text Address Field */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                Full Street / Campus Address
+              </label>
+              <input
+                type="text"
+                value={address}
+                onChange={e => setAddress(e.target.value)}
+                placeholder="e.g. Dharwad Agriculture Campus, Plot 12, Hubli-Dharwad Road, Karnataka"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-900 font-medium placeholder-slate-400 outline-none transition-all"
+              />
+            </div>
+
+            {/* Contact Person Details */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Contact Person
+                </label>
+                <input
+                  type="text"
+                  value={contactPerson}
+                  onChange={e => setContactPerson(e.target.value)}
+                  placeholder="e.g. Dr. Ramesh Kumar"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={contactPhone}
+                  onChange={e => setContactPhone(e.target.value)}
+                  placeholder="e.g. +91 98765 43210"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Contact Role
+                </label>
+                <select
+                  value={contactRole}
+                  onChange={e => setContactRole(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-emerald-500 cursor-pointer"
+                >
+                  <option value="Manager">Farm Manager</option>
+                  <option value="Owner">Land Owner</option>
+                  <option value="Worker">Field Worker</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Optional Map Coordinates Notice with Explicit Skip Toggle */}
+            <div className="p-4 bg-sky-50 border border-sky-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-sky-900">
+              <div className="flex items-center space-x-2">
+                <MapPin className="w-4 h-4 text-sky-600 shrink-0" />
+                <span>Map Boundary Setup: <strong>{skipMap ? 'Map location skipped (Can be added later)' : 'Map coordinates active'}</strong></span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSkipMap(!skipMap)}
+                className="px-3 py-1.5 bg-white text-sky-800 border border-sky-300 rounded-xl text-xs font-extrabold hover:bg-sky-100 transition-all cursor-pointer"
+              >
+                {skipMap ? 'Keep Skipped (Default)' : 'Skip Map for Now'}
+              </button>
+            </div>
+
             {/* Total Area Input using AreaUnitInput Component */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
                 Total Farmland Area
               </label>
@@ -340,8 +342,16 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                   setAreaUnit(unit);
                 }}
                 label="Property Surface Boundary"
-                placeholder="Enter total area (e.g. 25)"
+                placeholder="Enter total area (e.g. 20)"
               />
+
+              {/* 500+ Acre Sanity Check Warning */}
+              {totalArea > 500 && (
+                <div className="p-3 bg-amber-50 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold flex items-center space-x-2 animate-fadeIn">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Sanity Check Notice: Large farmland area entered ({totalArea} {areaUnit}). Please verify this is not a typo.</span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -388,7 +398,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
 
             {/* Quick Grid Selector */}
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-2">Quick Section Count Presets</label>
+              <label className="block text-xs font-semibold text-slate-500 mb-2">Quick Section Presets</label>
               <div className="flex flex-wrap gap-2">
                 {[1, 2, 3, 4, 6, 8].map(n => (
                   <button
@@ -418,7 +428,6 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                 <p className="text-xs text-slate-500 mt-1">Assign crops and surface area to each section. Sum must equal total farmland area.</p>
               </div>
 
-              {/* Reference indicator */}
               <div className="bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold self-start sm:self-auto">
                 Target: {totalArea} {areaUnit}
               </div>
@@ -432,7 +441,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                 ? 'bg-rose-50 border-rose-300 text-rose-950'
                 : 'bg-sky-50 border-sky-300 text-sky-950'
             }`}>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                 <div className="flex items-center space-x-2">
                   {isExactMatch ? (
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -444,15 +453,28 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                   </span>
                 </div>
 
-                <span className="text-xs font-bold">
-                  {isExactMatch ? (
-                    <span className="text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-lg">Exact Allocation Match</span>
-                  ) : diff > 0 ? (
-                    <span className="text-rose-700 bg-rose-100/80 px-2.5 py-1 rounded-lg">Over-allocated by {Math.abs(diff)} {areaUnit}</span>
-                  ) : (
-                    <span className="text-sky-700 bg-sky-100/80 px-2.5 py-1 rounded-lg">{Math.abs(diff)} {areaUnit} remaining to allocate</span>
+                <div className="flex items-center space-x-2">
+                  {isUnderAllocated && (
+                    <button
+                      type="button"
+                      onClick={handleAutoFillFallow}
+                      className="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-xs transition-all flex items-center space-x-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Auto-Fill Remainder to Fallow ({Math.abs(diff)} {areaUnit})</span>
+                    </button>
                   )}
-                </span>
+
+                  <span className="text-xs font-bold">
+                    {isExactMatch ? (
+                      <span className="text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-lg">Exact Allocation Match</span>
+                    ) : diff > 0 ? (
+                      <span className="text-rose-700 bg-rose-100/80 px-2.5 py-1 rounded-lg">Over-allocated by {Math.abs(diff)} {areaUnit}</span>
+                    ) : (
+                      <span className="text-sky-700 bg-sky-100/80 px-2.5 py-1 rounded-lg">{Math.abs(diff)} {areaUnit} remaining to allocate</span>
+                    )}
+                  </span>
+                </div>
               </div>
 
               {/* Visual Progress Bar */}
@@ -486,11 +508,12 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                   <div className="flex-1">
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Assigned Crop</label>
                     <select
-                      value={sec.cropId}
-                      onChange={e => updateSection(idx, 'cropId', e.target.value)}
+                      value={sec.cropId || ''}
+                      onChange={e => updateSection(idx, 'cropId', e.target.value || '')}
                       className="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-200 px-3 py-2.5 rounded-xl outline-none focus:border-emerald-500"
                     >
-                      {allCrops.map(c => (
+                      <option value="">🌱 Fallow / Unplanted Land</option>
+                      {storeCrops.map(c => (
                         <option key={c.id} value={c.id}>
                           {c.name} ({c.variety})
                         </option>
@@ -530,7 +553,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
               totalArea={totalArea}
               areaUnit={areaUnit}
               sections={sections}
-              allCrops={allCrops}
+              allCrops={storeCrops}
             />
           </div>
         )}
@@ -540,7 +563,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
           <div className="space-y-6 animate-fadeIn">
             <div className="border-b border-slate-100 pb-4">
               <h3 className="text-lg font-bold text-slate-900">Step 5: Confirm & Deploy Farmland</h3>
-              <p className="text-xs text-slate-500 mt-1">Verify all farmland parameters. On saving, records will be persisted to Firebase & Digital Twin OS.</p>
+              <p className="text-xs text-slate-500 mt-1">Verify all farmland parameters. On saving, records will be persisted synchronously.</p>
             </div>
 
             <div className="bg-slate-900 text-white rounded-2xl p-6 space-y-4">
@@ -551,7 +574,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400">Location</span>
-                  <p className="font-extrabold text-white text-base mt-0.5">{location || 'Salinas Valley'}</p>
+                  <p className="font-extrabold text-white text-base mt-0.5">{location || 'Dharwad, Karnataka'}</p>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400">Total Area</span>
@@ -567,12 +590,12 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                 <h4 className="text-xs font-bold uppercase text-slate-400 mb-2">Sections Summary</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {sections.map(s => {
-                    const crop = allCrops.find(c => c.id === s.cropId);
+                    const crop = storeCrops.find(c => c.id === s.cropId);
                     return (
                       <div key={s.code} className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 flex items-center justify-between">
                         <div>
                           <span className="font-bold text-emerald-300 text-xs">{s.code}</span> &bull; <span className="font-medium text-slate-200 text-xs">{s.name}</span>
-                          <p className="text-[11px] text-slate-400 mt-0.5">{crop ? `${crop.name}` : 'Custom Crop'}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{crop ? `${crop.name} (${crop.variety})` : '🌱 Fallow / Unplanted'}</p>
                         </div>
                         <span className="text-xs font-bold text-white bg-slate-900 px-2 py-1 rounded-lg border border-slate-700">
                           {s.area} {areaUnit}
@@ -618,7 +641,7 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
             className="flex items-center space-x-2 px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm shadow-xl shadow-emerald-600/30 disabled:opacity-40 transition-all cursor-pointer"
           >
             <Save className="w-4 h-4" />
-            <span>{saving ? 'Saving & Deploying...' : 'Deploy Farmland & Sections'}</span>
+            <span>{saving ? 'Deploying Farmland...' : 'Deploy Farmland & Sections'}</span>
           </button>
         )}
       </div>

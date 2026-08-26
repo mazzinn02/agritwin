@@ -26,6 +26,10 @@ import Crops from './pages/farm-management/Crops';
 import FieldAuditLog from './pages/farm-management/FieldAuditLog';
 
 import AddNewFarmlandPage from './pages/AddNewFarmlandPage';
+import ManualTelemetryPage from './pages/ManualTelemetryPage';
+import ResearchView from './pages/ResearchView';
+
+import { AgriStoreProvider } from './context/AgriStore';
 
 // Clean-Slate Gatekeeper: redirects to /onboarding if no farm/plot exists
 const CleanSlateGatekeeper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -33,7 +37,7 @@ const CleanSlateGatekeeper: React.FC<{ children: React.ReactNode }> = ({ childre
   const rawProfile = typeof window !== 'undefined' ? localStorage.getItem('agri_farm_profile') : null;
   const rawPlots = typeof window !== 'undefined' ? localStorage.getItem('agri_plots') : null;
 
-  const isCleanSlate = !rawProfile && !rawPlots;
+  const isCleanSlate = false; // AgriStore seeds default IIIT Dharwad farm
 
   if (isCleanSlate && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
@@ -44,9 +48,10 @@ const CleanSlateGatekeeper: React.FC<{ children: React.ReactNode }> = ({ childre
 
 function App() {
   return (
-    <AuthProvider>
-      <UserModeProvider>
-        <Router>
+    <AgriStoreProvider>
+      <AuthProvider>
+        <UserModeProvider>
+          <Router>
           <Routes>
             {/* Public Authentication Routes */}
             <Route
@@ -97,6 +102,8 @@ function App() {
 
               {/* Admin-Only Routes */}
               <Route path="add-farmland" element={<AdminRoute><AddNewFarmlandPage /></AdminRoute>} />
+              <Route path="manual-telemetry" element={<AdminRoute><ManualTelemetryPage /></AdminRoute>} />
+              <Route path="research" element={<AdminRoute><ResearchView /></AdminRoute>} />
               <Route path="history" element={<AdminRoute><FieldLog /></AdminRoute>} />
               <Route path="advisor" element={<AdminRoute><AIAdvisor /></AdminRoute>} />
               <Route path="what-if" element={<AdminRoute><WhatIfSimulator /></AdminRoute>} />
@@ -115,6 +122,7 @@ function App() {
         </Router>
       </UserModeProvider>
     </AuthProvider>
+  </AgriStoreProvider>
   );
 }
 

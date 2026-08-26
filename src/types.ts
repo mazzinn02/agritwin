@@ -25,7 +25,23 @@ export interface Crop {
   idealTempMax: number;
   idealPhMin: number;
   idealPhMax: number;
+  gddBaseTemp?: number;
   createdAt?: string;
+}
+
+export interface Farmland {
+  id: string;
+  name: string;
+  location: string;
+  address?: string;
+  contactPerson?: string;
+  contactPhone?: string;
+  contactRole?: 'Owner' | 'Manager' | 'Worker';
+  hasMapCoordinates?: boolean;
+  totalArea: number;
+  unit: string;
+  sectionsCount: number;
+  createdAt: string;
 }
 
 export interface PlotBed {
@@ -68,6 +84,34 @@ export interface AuditLogEntry {
   triggered_by: 'auto' | 'manual';
   timestamp: string;
   details: string;
+}
+
+export type DataSourceType = 'MANUAL_PROTOTYPE' | 'SENSOR' | 'AI_ML' | 'DERIVED' | 'SIMULATION';
+
+export interface TelemetryObservation {
+  id: string;
+  farmId: string;
+  plotId: string;
+  deviceId: string;
+  sensorId: string;
+  parameterKey: string;
+  displayName: string;
+  value: number;
+  unit: string;
+  measurementTimestamp: string;
+  receivedTimestamp: string;
+  qualityStatus: 'VALID' | 'WARNING' | 'INVALID';
+  dataSource: DataSourceType;
+  metadata?: Record<string, any>;
+}
+
+export interface ParameterDefinition {
+  key: string;
+  displayName: string;
+  unit: string;
+  category: 'soil' | 'atmosphere' | 'water' | 'crop';
+  minRange: number;
+  maxRange: number;
 }
 
 export interface TelemetryRecord {

@@ -17,11 +17,9 @@ import {
   Area,
   ComposedChart
 } from 'recharts';
-import { computeGrowthStatus, STAGES_ORDER } from '../lib/gdd-calculator';
-import CropGrowthTracker from '../components/dashboard/CropGrowthTracker';
-import { LineChart, BarChart2, Filter, Save, Check, Flame } from 'lucide-react';
-import { getPlots, getCrops } from '../lib/farm-storage';
-import { PlotBed, Crop } from '../types';
+import { useAgriStore } from '../context/AgriStore';
+import { PrototypeModeBanner } from '../components/common/PrototypeModeBanner';
+import { DataSourceBadge } from '../components/common/DataSourceBadge';
 
 const PARAMETERS = [
   { id: 'airTemp', name: 'Air Temp (°C)', color: '#ef4444' },
@@ -122,10 +120,9 @@ const PopoverDropdown = ({ label, value, options, onChange, multi = false }: any
 };
 
 export const Analytics: React.FC = () => {
-  const [plots, setPlots] = useState<PlotBed[]>([]);
-  const [crops, setCrops] = useState<Crop[]>([]);
+  const { activeSections: plots, crops, telemetryObservations } = useAgriStore();
   const [mode, setMode] = useState<'Single' | 'Compare' | 'GrowthGDD'>('Single');
-  const [selectedPlot, setSelectedPlot] = useState<string>('');
+  const [selectedPlot, setSelectedPlot] = useState<string>(plots[0]?.id || '');
   const [selectedParams, setSelectedParams] = useState<string[]>(['airTemp', 'soilMoisture']);
   const [startDate, setStartDate] = useState(() => new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 16));
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 16));
@@ -140,16 +137,18 @@ export const Analytics: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const loadedPlots = getPlots();
-    const loadedCrops = getCrops();
-    setPlots(loadedPlots);
-    setCrops(loadedCrops);
-    if (loadedPlots.length > 0) {
-      setSelectedPlot(loadedPlots[0].id);
-      setComparePlot1(loadedPlots[0].id);
-      setComparePlot2(loadedPlots[1]?.id || loadedPlots[0].id);
+    if (plots.length > 0) {
+      if (!selectedPlot || !plots.some(p => p.id === selectedPlot)) {
+        setSelectedPlot(plots[0].id);
+      }
+      if (!comparePlot1 || !plots.some(p => p.id === comparePlot1)) {
+        setComparePlot1(plots[0].id);
+      }
+      if (!comparePlot2 || !plots.some(p => p.id === comparePlot2)) {
+        setComparePlot2(plots[1]?.id || plots[0].id);
+      }
     }
-  }, []);
+  }, [plots]);
 
   const plotOptions = useMemo(() => {
     return plots.map(p => {
@@ -238,56 +237,39 @@ export const Analytics: React.FC = () => {
   useEffect(() => {
     if (mode === 'GrowthGDD') return;
 
-    const fetchData = async () => {
-      setLoading(true);
-      if (mode === 'Single') {
-        let items: any[] = [];
-        try {
-          const historyRef = ref(db, `telemetry_history/${selectedPlot}`);
-          const startTs = new Date(startDate).getTime();
-          const endTs = new Date(endDate).getTime();
-          const q = query(historyRef, orderByChild('timestamp'), startAt(startTs), endAt(endTs));
-          const snap = await get(q);
-          if (snap.exists()) {
-            items = Object.values(snap.val()).map((item: any) => ({
-              ...item,
-              timeStr: new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }));
-          }
-        } catch (e) {
-          // ignore
-        }
+    setLoading(true);
+    if (mode === 'Single') {
+      const plotObs = telemetryObservations.filter(
+        o => o.plotId === selectedPlot || o.plotId === activePlot?.code
+      );
 
-        // If fewer than 5 records exist, synthesize a realistic telemetry timeline
-        if (items.length < 5 && activePlot) {
-          const hours = ['06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'];
-          items = hours.map((hour, idx) => {
-            const tempVar = Math.sin((idx / 7) * Math.PI) * 4.5 - 1.5;
-            const moistVar = -Math.sin((idx / 7) * Math.PI) * 5.2;
-            return {
-              timeStr: hour,
-              airTemp: Number((activePlot.airTemp + tempVar).toFixed(1)),
-              soilMoisture: Number(Math.max(30, Math.min(88, activePlot.soilMoisture + moistVar)).toFixed(1)),
-              soilPh: activePlot.soilPh,
-              humidity: Number((62 - tempVar * 2).toFixed(0)),
-              vpd: 1.05,
-              light: 650
-            };
-          });
-        }
+      const items = plotObs.map(o => ({
+        timeStr: new Date(o.measurementTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date(o.measurementTimestamp).getTime(),
+        airTemp: o.parameterKey === 'air_temperature' ? o.value : activePlot?.airTemp || 24,
+        soilMoisture: o.parameterKey === 'soil_moisture' ? o.value : activePlot?.soilMoisture || 60,
+        soilPh: o.parameterKey === 'soil_ph' ? o.value : activePlot?.soilPh || 6.5,
+        humidity: 62,
+        vpd: 1.05,
+        light: 650,
+        dataSource: o.dataSource
+      }));
 
-        setData(items);
-      } else {
-        const merged = await fetchComparisonData([comparePlot1, comparePlot2], compareParam);
-        setData(merged);
-      }
-      setLoading(false);
-    };
-
-    fetchData();
-    const timer = setInterval(fetchData, 5000);
-    return () => clearInterval(timer);
-  }, [mode, selectedPlot, selectedParams, startDate, endDate, comparePlot1, comparePlot2, compareParam, activePlot]);
+      // Sort by timestamp
+      items.sort((a, b) => a.timestamp - b.timestamp);
+      setData(items.length > 0 ? items : [{
+        timeStr: 'Observed',
+        airTemp: activePlot?.airTemp || 24,
+        soilMoisture: activePlot?.soilMoisture || 60,
+        soilPh: activePlot?.soilPh || 6.5,
+        humidity: 62,
+        vpd: 1.05,
+        light: 650,
+        dataSource: 'MANUAL_PROTOTYPE'
+      }]);
+    }
+    setLoading(false);
+  }, [mode, selectedPlot, selectedParams, startDate, endDate, comparePlot1, comparePlot2, compareParam, activePlot, telemetryObservations]);
 
   const handleSaveSession = async () => {
     if (!sessionName) return;
@@ -298,15 +280,20 @@ export const Analytics: React.FC = () => {
 
   return (
     <div className="space-y-6 text-slate-800">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Prototype Banner */}
+      <PrototypeModeBanner />
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/95 backdrop-blur-sm p-6 rounded-3xl shadow-sm border border-slate-200/80">
         <div>
-          <h2 className="text-3xl font-extrabold text-slate-900 flex items-center">
-            <LineChart className="mr-3 text-sky-600 w-8 h-8" />
-            Analytics & Thermal Engine
-          </h2>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Cross-plot telemetry, phenological progression curves, and GDD thermal time</p>
+          <h1 className="text-xl font-bold text-slate-900">Farm Analytics & Telemetry Insights</h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Observe historical biophysical metrics, compare section performance, and track Growing Degree Days (GDD).
+          </p>
         </div>
-        <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 shadow-xs">
+
+        {/* Mode Selector */}
+        <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
           <button 
             onClick={() => setMode('Single')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${mode === 'Single' ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'text-slate-500 hover:text-slate-800'}`}
@@ -329,6 +316,17 @@ export const Analytics: React.FC = () => {
         </div>
       </div>
 
+      {/* Plain English Summary Banner */}
+      {stats && (
+        <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 text-xs font-bold flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="text-emerald-400 font-extrabold">{stats.param} Summary:</span>
+            <span>Average value of {stats.avg} in selected timeframe. Min: {stats.min}, Max: {stats.max}.</span>
+          </div>
+          <DataSourceBadge source="MANUAL_PROTOTYPE" />
+        </div>
+      )}
+
       {/* ================= VIEW 1 & 2: TELEMETRY CHARTS ================= */}
       {mode !== 'GrowthGDD' && (
         <div className="bg-white/95 backdrop-blur-sm p-6 rounded-3xl shadow-sm border border-slate-200/80 space-y-6">
@@ -339,10 +337,36 @@ export const Analytics: React.FC = () => {
               <>
                 <PopoverDropdown label="Plot" value={selectedPlot} options={plotOptions} onChange={setSelectedPlot} />
                 <PopoverDropdown label="Parameters" value={selectedParams} options={PARAMETERS} onChange={setSelectedParams} multi={true} />
-                <div className="flex items-center space-x-2">
-                  <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-xs bg-slate-50 text-slate-800 border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:ring-2 focus:ring-sky-500 font-medium" />
-                  <span className="text-slate-400 text-xs font-bold">to</span>
-                  <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-xs bg-slate-50 text-slate-800 border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:ring-2 focus:ring-sky-500 font-medium" />
+                
+                {/* Quick Time Range Pills */}
+                <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  <button
+                    onClick={() => {
+                      setStartDate(new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 16));
+                      setEndDate(new Date().toISOString().slice(0, 16));
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-white rounded-lg transition-all"
+                  >
+                    Today
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStartDate(new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 16));
+                      setEndDate(new Date().toISOString().slice(0, 16));
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-white rounded-lg transition-all"
+                  >
+                    Last 7 Days
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStartDate(new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 16));
+                      setEndDate(new Date().toISOString().slice(0, 16));
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-white rounded-lg transition-all"
+                  >
+                    Last 30 Days
+                  </button>
                 </div>
               </>
             ) : (

@@ -5,7 +5,6 @@ import {
   Sprout, 
   History, 
   LineChart, 
-  BrainCircuit, 
   Map, 
   Camera, 
   Activity, 
@@ -21,258 +20,400 @@ import {
   Users,
   LogOut,
   ShieldCheck,
-  PlusCircle
+  PlusCircle,
+  UserCheck,
+  Database,
+  Building2,
+  Radio,
+  BrainCircuit,
+  Bot
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-const adminPrimaryItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Crop Vision', path: '/vision', icon: Sprout },
-  { name: 'Field Log', path: '/history', icon: History },
-  { name: 'Analytics', path: '/analytics', icon: LineChart },
-  { name: 'AI Advisor', path: '/advisor', icon: BrainCircuit },
-  { name: 'Camera Feed', path: '/camera', icon: Camera },
-  { name: 'My Sensors', path: '/sensors', icon: Activity },
-  { name: 'Device Control', path: '/control', icon: Settings2 },
-];
-
-const farmerPrimaryItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Analytics', path: '/analytics', icon: LineChart },
-  { name: 'Crop Vision', path: '/vision', icon: Sprout },
-  { name: 'Device Control', path: '/control', icon: Settings2 },
-  { name: 'Camera Feed', path: '/camera', icon: Camera },
-  { name: 'Map View', path: '/map', icon: Map },
-];
-
-const farmManagementItems = [
-  { name: 'Crops', path: '/farm-management/crops', icon: Sprout },
-  { name: 'Field Audit Log', path: '/farm-management/audit-log', icon: FileText },
-];
-
-const advancedItems = [
-  { name: 'What-If Simulator', path: '/what-if', icon: Sliders },
-  { name: 'Crop Comparison', path: '/compare', icon: GitCompare },
-  { name: 'Virtual Farm', path: '/virtual-farm', icon: Grid },
-  { name: 'Map View', path: '/map', icon: Map },
-];
-
 export const Sidebar: React.FC = () => {
-  const [farmMgmtOpen, setFarmMgmtOpen] = useState(true);
-  const [advancedOpen, setAdvancedOpen] = useState(true);
-  const { user, userProfile, isAdmin, logout } = useAuth();
+  const { userProfile, role, isAdmin, isFarmer, logout } = useAuth();
   const navigate = useNavigate();
 
+  // Collapsible Categories state
+  const [monitoringOpen, setMonitoringOpen] = useState(true);
+  const [farmOpen, setFarmOpen] = useState(true);
+  const [actionsOpen, setActionsOpen] = useState(true);
+  const [researchOpen, setResearchOpen] = useState(true);
+  const [adminOpen, setAdminOpen] = useState(true);
+
   const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login', { replace: true });
-    } catch (err) {
-      console.error('Failed to logout:', err);
-    }
+    await logout();
+    navigate('/login');
   };
 
-  const displayName = userProfile?.full_name || user?.displayName || user?.email?.split('@')[0] || 'User';
-  const initial = (displayName.charAt(0) || 'U').toUpperCase();
-
-  const currentPrimaryItems = isAdmin ? adminPrimaryItems : farmerPrimaryItems;
-
   return (
-    <div className="flex flex-col w-64 h-screen bg-white text-slate-700 border-r border-slate-200/80 shadow-xs z-20 select-none shrink-0">
-      {/* Brand Logo */}
-      <div className="flex items-center space-x-2.5 h-20 border-b border-slate-200/80 px-6 shrink-0">
-        <div className="p-2 rounded-xl bg-gradient-to-tr from-emerald-600 to-sky-600 text-white shadow-sm">
-          <Leaf className="w-5 h-5" />
+    <aside className="w-64 bg-slate-900 text-white flex flex-col h-full border-r border-slate-800 shadow-2xl shrink-0 font-sans">
+      {/* Brand Header */}
+      <div className="p-5 border-b border-slate-800 flex items-center space-x-3">
+        <div className="p-2 bg-gradient-to-tr from-emerald-500 to-teal-400 rounded-xl shadow-md text-slate-950">
+          <Leaf className="w-5 h-5 fill-current" />
         </div>
         <div>
-          <h1 className="text-lg font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-700 via-teal-700 to-sky-700">
-            AgriTwin
-          </h1>
-          <p className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase">Digital Twin OS</p>
+          <div className="flex items-center space-x-1.5">
+            <span className="font-black text-lg text-white tracking-wide">AgriTwin</span>
+            <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-950 border border-emerald-800 px-1.5 py-0.5 rounded">
+              v2.5
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-400 font-medium">Digital Twin Architecture</p>
         </div>
       </div>
 
-      {/* Nav Menu */}
-      <nav className="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto">
-        {currentPrimaryItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.name}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                  isActive
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs font-bold'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
-                }`
-              }
-            >
-              <Icon className="w-5 h-5 mr-3 shrink-0" />
-              <span className="text-sm">{item.name}</span>
-            </NavLink>
-          );
-        })}
+      {/* Navigation Groups Container */}
+      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-4 text-xs font-medium">
+        
+        {/* 1. PRIMARY */}
+        <div>
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all duration-150 font-bold ${
+                isActive
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`
+            }
+          >
+            <LayoutDashboard className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm">Dashboard</span>
+          </NavLink>
+        </div>
 
-        {/* ADMIN ONLY SECTIONS */}
-        {isAdmin && (
-          <>
-            {/* Prominent Add New Farmland Button */}
-            <div className="pt-2 pb-1">
+        {/* 2. MONITORING SECTION */}
+        <div className="border-t border-slate-800/80 pt-3">
+          <button
+            onClick={() => setMonitoringOpen(!monitoringOpen)}
+            className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
+          >
+            <span>MONITORING</span>
+            {monitoringOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          </button>
+
+          {monitoringOpen && (
+            <div className="mt-1.5 space-y-1 pl-1">
               <NavLink
-                to="/add-farmland"
+                to="/advisor"
                 className={({ isActive }) =>
-                  `flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl font-extrabold text-xs transition-all shadow-sm ${
-                    isActive
-                      ? 'bg-emerald-700 text-white shadow-md'
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                   }`
                 }
               >
-                <PlusCircle className="w-4 h-4" />
-                <span>+ Add New Farmland</span>
+                <BrainCircuit className="w-4 h-4 text-emerald-500" />
+                <span>AI Advisor</span>
+              </NavLink>
+
+              <NavLink
+                to="/virtual-farm"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
+              >
+                <Grid className="w-4 h-4 text-emerald-500" />
+                <span>Live Farm</span>
+              </NavLink>
+
+              <NavLink
+                to="/vision"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
+              >
+                <Sprout className="w-4 h-4 text-emerald-500" />
+                <span>Crop Health</span>
+              </NavLink>
+
+              <NavLink
+                to="/history"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
+              >
+                <History className="w-4 h-4 text-emerald-500" />
+                <span>Field Log</span>
+              </NavLink>
+
+              <NavLink
+                to="/analytics"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
+              >
+                <LineChart className="w-4 h-4 text-emerald-500" />
+                <span>Analytics</span>
+              </NavLink>
+
+              <NavLink
+                to="/camera"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
+              >
+                <Camera className="w-4 h-4 text-emerald-500" />
+                <span>Camera Feed</span>
               </NavLink>
             </div>
+          )}
+        </div>
 
-            {/* Collapsible Farm Management */}
-            <div className="pt-3 mt-3 border-t border-slate-200/80">
-              <button
-                onClick={() => setFarmMgmtOpen(!farmMgmtOpen)}
-                className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider hover:text-slate-800 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-1.5">
-                  <FolderKanban className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Farm Management</span>
-                </span>
-                {farmMgmtOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
-              </button>
-
-              {farmMgmtOpen && (
-                <div className="mt-1 space-y-1 pl-2">
-                  {farmManagementItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <NavLink
-                        key={item.name}
-                        to={item.path}
-                        className={({ isActive }) =>
-                          `flex items-center px-3 py-2 rounded-lg text-xs transition-all duration-200 ${
-                            isActive
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold'
-                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
-                          }`
-                        }
-                      >
-                        <Icon className="w-4 h-4 mr-2.5 shrink-0 text-emerald-600" />
-                        <span>{item.name}</span>
-                      </NavLink>
-                    );
-                  })}
-
-                  {/* Admin-Only User Management Item */}
-                  <NavLink
-                    to="/users"
-                    className={({ isActive }) =>
-                      `flex items-center px-3 py-2 rounded-lg text-xs transition-all duration-200 ${
-                        isActive
-                          ? 'bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold'
-                          : 'text-indigo-700 hover:bg-indigo-50/60 font-medium'
-                      }`
-                    }
-                  >
-                    <Users className="w-4 h-4 mr-2.5 shrink-0 text-indigo-600" />
-                    <div className="flex items-center justify-between w-full">
-                      <span>User Management</span>
-                      <span className="text-[9px] px-1.5 py-0.2 bg-indigo-100 text-indigo-700 rounded font-bold uppercase">
-                        Admin
-                      </span>
-                    </div>
-                  </NavLink>
-                </div>
-              )}
-            </div>
-
-            {/* Collapsible Advanced Tools */}
-            <div className="pt-3 mt-2 border-t border-slate-200/80">
-              <button
-                onClick={() => setAdvancedOpen(!advancedOpen)}
-                className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider hover:text-slate-800 transition-colors cursor-pointer"
-              >
-                <span>Advanced Tools</span>
-                {advancedOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
-              </button>
-
-              {advancedOpen && (
-                <div className="mt-1 space-y-1 pl-2">
-                  {advancedItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <NavLink
-                        key={item.name}
-                        to={item.path}
-                        className={({ isActive }) =>
-                          `flex items-center px-3 py-2 rounded-lg text-xs transition-all duration-200 ${
-                            isActive
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold'
-                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
-                          }`
-                        }
-                      >
-                        <Icon className="w-4 h-4 mr-2.5 shrink-0" />
-                        <span>{item.name}</span>
-                      </NavLink>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </nav>
-
-      {/* User Profile Section at bottom */}
-      <div className="p-3 border-t border-slate-200/80 bg-slate-50/70 shrink-0">
-        <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs mb-2">
-          <div className="flex items-center space-x-2.5 overflow-hidden">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-              isAdmin ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'
-            }`}>
-              {initial}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-slate-800 truncate" title={displayName}>
-                {displayName}
-              </p>
-              <div className="flex items-center gap-1 mt-0.5">
-                {isAdmin ? (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100">
-                    <ShieldCheck className="w-2.5 h-2.5" />
-                    Admin
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
-                    <Sprout className="w-2.5 h-2.5" />
-                    Farmer
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
+        {/* 3. FARM & PLOTS */}
+        <div className="border-t border-slate-800/80 pt-3">
           <button
-            onClick={handleLogout}
-            title="Log Out"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0 ml-1"
+            onClick={() => setFarmOpen(!farmOpen)}
+            className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
           >
-            <LogOut className="w-4 h-4" />
+            <span>FARM</span>
+            {farmOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
+
+          {farmOpen && (
+            <div className="mt-1.5 space-y-1 pl-1">
+              <NavLink
+                to="/"
+                className="flex items-center space-x-2.5 px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              >
+                <Building2 className="w-4 h-4 text-sky-400" />
+                <span>My Farms</span>
+              </NavLink>
+
+              <NavLink
+                to="/farm-management/crops"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
+              >
+                <FolderKanban className="w-4 h-4 text-sky-400" />
+                <span>Plots & Crops</span>
+              </NavLink>
+
+              <NavLink
+                to="/sensors"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
+              >
+                <Radio className="w-4 h-4 text-sky-400" />
+                <span>My Sensors</span>
+              </NavLink>
+            </div>
+          )}
         </div>
 
-        <div className="text-[10px] text-slate-400 text-center font-medium">
-          AgriTwin Platform &bull; Farm Management
+        {/* 4. ACTIONS */}
+        <div className="border-t border-slate-800/80 pt-3">
+          <button
+            onClick={() => setActionsOpen(!actionsOpen)}
+            className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
+          >
+            <span>ACTIONS</span>
+            {actionsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          </button>
+
+          {actionsOpen && (
+            <div className="mt-1.5 space-y-1 pl-1">
+              {isAdmin && (
+                <NavLink
+                  to="/manual-telemetry"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-indigo-600 text-white font-bold' : 'text-indigo-300 hover:bg-indigo-950/60'
+                    }`
+                  }
+                >
+                  <UserCheck className="w-4 h-4 text-indigo-400" />
+                  <span>+ Add Observation</span>
+                </NavLink>
+              )}
+
+              {isAdmin && (
+                <NavLink
+                  to="/add-farmland"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-emerald-600 text-white font-bold' : 'text-emerald-300 hover:bg-emerald-950/60'
+                    }`
+                  }
+                >
+                  <PlusCircle className="w-4 h-4 text-emerald-400" />
+                  <span>+ Add New Farmland</span>
+                </NavLink>
+              )}
+
+              <NavLink
+                to="/control"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
+              >
+                <Activity className="w-4 h-4 text-amber-400" />
+                <span>Device Control</span>
+              </NavLink>
+            </div>
+          )}
         </div>
+
+        {/* 5. RESEARCH & DIGITAL TWIN (ADMIN / RESEARCHER ROLE GATED) */}
+        {isAdmin && (
+          <div className="border-t border-slate-800/80 pt-3">
+            <button
+              onClick={() => setResearchOpen(!researchOpen)}
+              className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
+            >
+              <span>RESEARCH & DIGITAL TWIN</span>
+              {researchOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
+
+            {researchOpen && (
+              <div className="mt-1.5 space-y-1 pl-1">
+                <NavLink
+                  to="/research"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`
+                  }
+                >
+                  <Database className="w-4 h-4 text-purple-400" />
+                  <span>Research Workspace</span>
+                </NavLink>
+
+                <NavLink
+                  to="/map"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`
+                  }
+                >
+                  <Map className="w-4 h-4 text-purple-400" />
+                  <span>Map View</span>
+                </NavLink>
+
+                <NavLink
+                  to="/compare"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`
+                  }
+                >
+                  <GitCompare className="w-4 h-4 text-purple-400" />
+                  <span>Crop Comparison</span>
+                </NavLink>
+
+                <NavLink
+                  to="/what-if"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`
+                  }
+                >
+                  <Sliders className="w-4 h-4 text-purple-400" />
+                  <span>What-If Simulator</span>
+                </NavLink>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 6. ADMINISTRATION (ADMIN ONLY GATED BY REAL AUTH ROLE) */}
+        {isAdmin && (
+          <div className="border-t border-slate-800/80 pt-3">
+            <button
+              onClick={() => setAdminOpen(!adminOpen)}
+              className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
+            >
+              <span>ADMINISTRATION</span>
+              {adminOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
+
+            {adminOpen && (
+              <div className="mt-1.5 space-y-1 pl-1">
+                <NavLink
+                  to="/users"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-indigo-900/60 text-indigo-300 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`
+                  }
+                >
+                  <Users className="w-4 h-4 text-indigo-400" />
+                  <span>User Management</span>
+                </NavLink>
+
+                <NavLink
+                  to="/sensors"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`
+                  }
+                >
+                  <Radio className="w-4 h-4 text-indigo-400" />
+                  <span>Sensors & Devices</span>
+                </NavLink>
+
+                <NavLink
+                  to="/farm-management/audit-log"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`
+                  }
+                >
+                  <FileText className="w-4 h-4 text-indigo-400" />
+                  <span>Field Audit Log</span>
+                </NavLink>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </div>
+
+      {/* User Footer Profile & Logout */}
+      <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
+        <div className="flex items-center space-x-3 overflow-hidden">
+          <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-black text-sm text-emerald-400 shrink-0">
+            {userProfile?.full_name?.charAt(0) || 'U'}
+          </div>
+          <div className="truncate">
+            <span className="text-xs font-bold text-white block truncate">{userProfile?.full_name || 'System User'}</span>
+            <span className="text-[10px] font-black uppercase text-emerald-400 block tracking-wider">{role || 'farmer'}</span>
+          </div>
+        </div>
+
+        <button
+          onClick={handleLogout}
+          title="Sign Out"
+          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
+      </div>
+    </aside>
   );
 };
 

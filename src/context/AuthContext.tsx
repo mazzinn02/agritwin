@@ -32,6 +32,9 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
+const LOCAL_CREDENTIALS_KEY = 'agritwin_credentials';
+const ACTIVE_SESSION_KEY = 'agritwin_active_session';
+
 const DEFAULT_CREDENTIALS: Record<string, { password: string; profile: UserProfile }> = {
   'admin@agritwin.com': {
     password: 'admin123',
@@ -202,6 +205,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (email: string, password: string): Promise<UserProfile | null> => {
+    // 1. First check local seeded credentials for instant zero-hang auth
+    const creds = getStoredCredentials();
+    const existing = creds[email.toLowerCase()];
+    if (existing && existing.password === password) {
+      const profile = existing.profile;
+      setUser({ uid: profile.uid, email: profile.email, displayName: profile.full_name });
+      setUserProfile(profile);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(profile));
+        localStorage.setItem('agritwin_current_user_profile', JSON.stringify(profile));
+      }
+      return profile;
+    }
+
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       setUser(cred.user);
@@ -210,33 +227,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserProfile(profile);
         if (typeof window !== 'undefined') {
           localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(profile));
+          localStorage.setItem('agritwin_current_user_profile', JSON.stringify(profile));
         }
         return profile;
       }
     } catch (err: any) {
-      if (err?.code === 'auth/operation-not-allowed' || err?.code === 'auth/network-request-failed') {
-        // Look up local credentials
-        const creds = getStoredCredentials();
-        const existing = creds[email.toLowerCase()];
-        if (existing && existing.password === password) {
-          const profile = existing.profile;
-          setUser({ uid: profile.uid, email: profile.email, displayName: profile.full_name });
-          setUserProfile(profile);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(profile));
-          }
-          return profile;
-        } else if (existing && existing.password !== password) {
-          const error: any = new Error('Wrong password provided for this account.');
-          error.code = 'auth/wrong-password';
-          throw error;
-        } else {
-          const error: any = new Error('No user found with this email address.');
-          error.code = 'auth/user-not-found';
-          throw error;
-        }
+      if (existing && existing.password !== password) {
+        const error: any = new Error('Wrong password provided for this account.');
+        error.code = 'auth/wrong-password';
+        throw error;
       } else {
-        throw err;
+        const error: any = new Error('No user found with this email address.');
+        error.code = 'auth/user-not-found';
+        throw error;
       }
     }
 

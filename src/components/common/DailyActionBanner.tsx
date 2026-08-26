@@ -11,10 +11,8 @@ import {
   Sprout,
   Check
 } from 'lucide-react';
-import { useUserMode } from '../../context/UserModeContext';
-import { getPlots, getCrops, updatePlot, addTelemetryRecord } from '../../lib/farm-storage';
-import { logFieldAction } from '../../lib/audit-log';
-import { PlotBed, Crop } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import { useAgriStore } from '../../context/AgriStore';
 
 export interface ActionItem {
   id: string;
@@ -31,23 +29,10 @@ export interface ActionItem {
 }
 
 export const DailyActionBanner: React.FC = () => {
-  const { isFarmer } = useUserMode();
-  const [plots, setPlots] = useState<PlotBed[]>([]);
-  const [crops, setCrops] = useState<Crop[]>([]);
+  const { isFarmer } = useAuth();
+  const { activeSections: plots, crops, triggerActuator } = useAgriStore();
   const [activeTimers, setActiveTimers] = useState<Record<string, number>>({});
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-
-  const loadData = () => {
-    setPlots(getPlots());
-    setCrops(getCrops());
-  };
-
-  useEffect(() => {
-    loadData();
-    const handleStorageUpdate = () => loadData();
-    window.addEventListener('agri_storage_updated', handleStorageUpdate);
-    return () => window.removeEventListener('agri_storage_updated', handleStorageUpdate);
-  }, []);
 
   // Timer countdown loop
   useEffect(() => {
@@ -75,47 +60,11 @@ export const DailyActionBanner: React.FC = () => {
     const timerKey = `${plotId}_${deviceType}`;
     setActiveTimers(prev => ({ ...prev, [timerKey]: durationMins * 60 }));
 
-    const targetPlot = plots.find(p => p.id === plotId);
-    if (!targetPlot) return;
+    await triggerActuator(plotId, deviceType, 'manual');
 
     if (deviceType === 'irrigation') {
-      const boostedMoisture = Math.min(88, Number((targetPlot.soilMoisture + 8.5).toFixed(1)));
-      const updated = { ...targetPlot, soilMoisture: boostedMoisture, isWatering: true };
-      updatePlot(updated);
-
-      const targetCrop = crops.find(c => c.id === targetPlot.cropId);
-      addTelemetryRecord({
-        timestamp: new Date().toISOString(),
-        plotCode: targetPlot.code,
-        cropName: targetCrop ? `${targetCrop.name} (${targetCrop.variety})` : 'Fallow',
-        soilMoisture: boostedMoisture,
-        airTemp: targetPlot.airTemp,
-        soilPh: targetPlot.soilPh,
-        status: 'Optimal'
-      });
-
-      await logFieldAction(
-        plotId,
-        'irrigation',
-        'manual',
-        `Daily Action: Triggered ${durationMins}-min irrigation on ${plotCode}. Moisture raised to ${boostedMoisture}%.`,
-        plotCode
-      );
-
-      setActionSuccess(`Irrigation activated for ${plotCode} (+8.5% Moisture boost recorded).`);
+      setActionSuccess(`15-min irrigation pulse activated for ${plotCode} (+8.5% Moisture boost).`);
     } else {
-      const nextHvac = !targetPlot.hvacActive;
-      const updated = { ...targetPlot, hvacActive: nextHvac };
-      updatePlot(updated);
-
-      await logFieldAction(
-        plotId,
-        'hvac',
-        'manual',
-        `Daily Action: Switched canopy ventilation fan ${nextHvac ? 'ON' : 'OFF'} on ${plotCode}.`,
-        plotCode
-      );
-
       setActionSuccess(`Canopy fans toggled for ${plotCode}.`);
     }
 
@@ -173,7 +122,9 @@ export const DailyActionBanner: React.FC = () => {
         variety,
         status: 'optimal',
         title: 'Micro-Climate Optimal',
-        description: `Soil moisture at ${plot.soilMoisture}%, Temp at ${plot.airTemp}°C. Normal healthy transpiration.`
+        description: `Soil moisture at ${plot.soilMoisture}%, Temp at ${plot.airTemp}°C. Normal healthy transpiration.`,
+        actionLabel: undefined,
+        deviceType: undefined
       };
     });
   }, [plots, crops]);
@@ -182,11 +133,6 @@ export const DailyActionBanner: React.FC = () => {
 
   return (
     <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 border border-slate-200/90 shadow-sm space-y-4 relative overflow-hidden transition-all">
-      
-      {/* Ambient background decoration */}
-      <div className="absolute top-0 right-0 w-80 h-32 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Top Banner Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
         <div className="flex items-center space-x-2.5">
           <div className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 shadow-2xs">
@@ -196,10 +142,10 @@ export const DailyActionBanner: React.FC = () => {
             <h3 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
               <span>Smart Farm Precision Dispatcher</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-mono">
-                {isFarmer ? 'Farmer Priority Mode' : 'Agronomist Mode'}
+                {isFarmer ? 'Farmer Priority Mode' : 'Admin Mode'}
               </span>
             </h3>
-            <p className="text-xs text-slate-500">Live dynamic recommendations tailored to real-time sensor streams</p>
+            <p className="text-xs text-slate-500">Live dynamic recommendations tailored to real-time section observations</p>
           </div>
         </div>
 
@@ -231,7 +177,7 @@ export const DailyActionBanner: React.FC = () => {
                   : 'bg-emerald-50/40 border-emerald-200/80 text-emerald-950'
               }`}
             >
-              {/* Card Header: Crop info & Status */}
+              {/* Card Header */}
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center space-x-2">
                   <div className={`p-1.5 rounded-lg text-white font-bold text-xs ${
@@ -258,54 +204,42 @@ export const DailyActionBanner: React.FC = () => {
                 </span>
               </div>
 
-              {/* Card Body: Description */}
+              {/* Title & Description */}
               <div className="space-y-1">
-                <p className="text-xs font-bold leading-snug">{item.title}</p>
-                <p className="text-[11px] text-slate-600 leading-relaxed">{item.description}</p>
+                <div className="text-xs font-black text-slate-900">{item.title}</div>
+                <p className="text-[11px] text-slate-600 leading-snug">{item.description}</p>
               </div>
 
-              {/* Card Footer: Dynamic Actuation Button */}
+              {/* Card Footer Button */}
               {item.actionLabel && item.deviceType && (
-                <div className="pt-1">
+                <button
+                  onClick={() => handleTriggerAction(item.plotId, item.plotCode, item.deviceType!, item.durationMins)}
+                  disabled={isTimerActive}
+                  className={`w-full py-2 px-3 rounded-xl text-xs font-extrabold shadow-2xs transition-all flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95 ${
+                    isTimerActive
+                      ? 'bg-slate-700 text-slate-300 cursor-not-allowed'
+                      : item.status === 'urgent'
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                >
                   {isTimerActive ? (
-                    <div className="w-full py-2 px-3 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow-xs">
-                      <Clock className="w-3.5 h-3.5 animate-spin" />
-                      <span>
-                        Running ({minsLeft}:{secsLeft < 10 ? `0${secsLeft}` : secsLeft})
-                      </span>
-                    </div>
+                    <>
+                      <Clock className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                      <span>{minsLeft}:{secsLeft < 10 ? `0${secsLeft}` : secsLeft} Remaining</span>
+                    </>
                   ) : (
-                    <button
-                      onClick={() => handleTriggerAction(item.plotId, item.plotCode, item.deviceType!, item.durationMins || 15)}
-                      className={`w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all shadow-xs active:scale-95 cursor-pointer ${
-                        item.status === 'urgent'
-                          ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
-                          : 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/20'
-                      }`}
-                    >
-                      {item.deviceType === 'irrigation' ? (
-                        <Droplet className="w-3.5 h-3.5" />
-                      ) : (
-                        <Wind className="w-3.5 h-3.5" />
-                      )}
+                    <>
+                      {item.deviceType === 'irrigation' ? <Droplet className="w-3.5 h-3.5" /> : <Wind className="w-3.5 h-3.5" />}
                       <span>{item.actionLabel}</span>
-                    </button>
+                    </>
                   )}
-                </div>
+                </button>
               )}
-
-              {item.status === 'optimal' && (
-                <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-emerald-700 pt-1">
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>No intervention required</span>
-                </div>
-              )}
-
             </div>
           );
         })}
       </div>
-
     </div>
   );
 };

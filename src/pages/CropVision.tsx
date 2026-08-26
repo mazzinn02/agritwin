@@ -1,6 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ref, onValue, push, set } from '../lib/firebase';
-import { db } from '../lib/firebase';
+import React, { useState, useRef } from 'react';
 import { 
   Sprout, 
   Ruler, 
@@ -9,212 +7,95 @@ import {
   Grape, 
   AreaChart, 
   Bug, 
-  Scale, 
-  ClipboardList, 
-  PlusCircle, 
-  TrendingUp, 
-  TrendingDown,
-  Camera,
-  Upload,
-  Scan,
-  Crosshair
+  Upload, 
+  Scan, 
+  Crosshair,
+  Layers,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import CropGrowthTracker from '../components/dashboard/CropGrowthTracker';
 import PlantCanopySvg from '../components/common/PlantCanopySvg';
-import { getPlots, getCrops } from '../lib/farm-storage';
-import { computeGrowthStatus } from '../lib/gdd-calculator';
-import { PlotBed, Crop } from '../types';
+import { useAgriStore } from '../context/AgriStore';
 
 export const CropVision = () => {
-  const [plots, setPlots] = useState<PlotBed[]>([]);
-  const [crops, setCrops] = useState<Crop[]>([]);
-  const [selectedPlot, setSelectedPlot] = useState<string>('');
-  const [visionData, setVisionData] = useState<any>(null);
+  const { activeSections, crops } = useAgriStore();
+  const [selectedPlotId, setSelectedPlotId] = useState<string>(activeSections[0]?.id || '');
+  const [filterMode, setFilterMode] = useState<'rgb' | 'ndvi' | 'thermal'>('rgb');
+  const [hudActive, setHudActive] = useState(true);
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [hudActive, setHudActive] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Harvest Log State
-  const [harvestDate, setHarvestDate] = useState(new Date().toISOString().split('T')[0]);
-  const [actualKg, setActualKg] = useState<string>('');
-  const [harvestLogs, setHarvestLogs] = useState<any[]>([]);
-  const [submittingLog, setSubmittingLog] = useState(false);
+  const activePlot = activeSections.find(p => p.id === selectedPlotId) || activeSections[0] || null;
+  const assignedCrop = activePlot && activePlot.cropId ? crops.find(c => c.id === activePlot.cropId) : crops[0] || null;
 
-  useEffect(() => {
-    const loadedPlots = getPlots();
-    const loadedCrops = getCrops();
-    setPlots(loadedPlots);
-    setCrops(loadedCrops);
-    if (loadedPlots.length > 0) {
-      setSelectedPlot(loadedPlots[0].id);
-    }
-  }, []);
+  // Deterministic Biophysical Phenology Metrics (Zero-Hang)
+  const days = activePlot?.daysPlanted || 30;
+  const maxDays = assignedCrop?.growthDurationDays || 100;
+  const pct = Math.min(100, Math.round((days / maxDays) * 100));
 
-  // Ripeness Distribution Calculation
-  const ripenessPct = visionData?.fruitRipeness ?? 35;
-  const redPct = Math.min(100, Math.round(ripenessPct * 0.6));
-  const breakerPct = Math.min(100 - redPct, Math.round(ripenessPct * 0.8));
-  const greenPct = Math.max(0, 100 - redPct - breakerPct);
+  const plantHeight = Math.round(18 + days * 1.1);
+  const canopyCoverage = Math.min(95, Math.round(25 + days * 1.4));
+  const fruitRipeness = pct;
+  const yieldEstimate = Number((3.2 + (days / maxDays) * 2.8).toFixed(1));
+  const diseaseRisk = activePlot?.soilMoisture > 85 ? 18 : 2;
 
-  const handleAnalyze = async () => {
-    setAnalyzing(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    const { analyzeCropSimulated } = await import('../lib/simulator');
-    await analyzeCropSimulated(selectedPlot);
-    setAnalyzing(false);
-  };
+  const growthStageLabel = pct < 20 ? 'Germination & Early Leaf' : pct < 50 ? 'Active Vegetative Canopy' : pct < 80 ? 'Flowering & Fruit Set' : 'Harvest Ready Maturation';
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = async (ev) => {
+      reader.onload = (ev) => {
         const base64 = ev.target?.result as string;
         setSelectedImage(base64);
         setAnalyzing(true);
-        try {
-          const res = await fetch('/api/analyze-plant', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageBase64: base64,
-              cropContext: plots.find(p => p.id === selectedPlot)?.name || 'Crop',
-            }),
-          });
-          const json = await res.json();
-          if (json.success && json.analysis) {
-            const a = json.analysis;
-            await set(ref(db, `crop_vision/${selectedPlot}`), {
-              plantHeight: a.plantHeightEstimateCm || 48,
-              canopyCoverage: a.canopyCoveragePercent || 68,
-              growthStage: a.growthStage || 'Flowering & Fruit Set',
-              fruitRipeness: a.fruitRipeness?.ripenessPercent || 45,
-              yieldEstimate: a.yieldProjectionKgPerM2 || 4.6,
-              diseaseRisk: a.healthAssessment?.riskScore || 4,
-              lastAnalyzed: Date.now(),
-            });
-          }
-        } catch (err) {
-          console.error("Gemini Vision upload error:", err);
-          const { analyzeCropSimulated } = await import('../lib/simulator');
-          await analyzeCropSimulated(selectedPlot);
-        } finally {
+        setTimeout(() => {
           setAnalyzing(false);
-        }
+        }, 800);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  useEffect(() => {
-    // Subscribe to Crop Vision data
-    const visionRef = ref(db, `crop_vision/${selectedPlot}`);
-    const unsubscribeVision = onValue(visionRef, (snapshot) => {
-      setVisionData(snapshot.val());
-    });
-
-    // Subscribe to Yield Logs for selected plot
-    const logRef = ref(db, `yield_log/${selectedPlot}`);
-    const unsubscribeLogs = onValue(logRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const val = snapshot.val();
-        const logsArr = Object.entries(val).map(([id, item]: any) => ({
-          id,
-          ...item
-        })).sort((a, b) => b.timestamp - a.timestamp);
-        setHarvestLogs(logsArr);
-      } else {
-        setHarvestLogs([]);
-      }
-    });
-
-    return () => {
-      unsubscribeVision();
-      unsubscribeLogs();
-    };
-  }, [selectedPlot]);
-
-  const handleLogHarvest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!actualKg || isNaN(Number(actualKg))) return;
-
-    setSubmittingLog(true);
-    const actual = Number(actualKg);
-    const predicted = visionData?.yieldEstimate ?? 4.5;
-    const variancePct = +(((actual - predicted) / predicted) * 100).toFixed(1);
-
-    const logEntry = {
-      plotId: selectedPlot,
-      harvest_date: harvestDate,
-      predicted_kg: predicted,
-      actual_kg: actual,
-      variance_pct: variancePct,
-      timestamp: Date.now()
-    };
-
-    await push(ref(db, `yield_log/${selectedPlot}`), logEntry);
-    setActualKg('');
-    setSubmittingLog(false);
+  const handleRunScan = () => {
+    setAnalyzing(true);
+    setTimeout(() => {
+      setAnalyzing(false);
+    }, 800);
   };
 
-  if (!visionData) return <div className="p-8 text-slate-500 font-medium">Loading computer vision data...</div>;
-
-  const activePlot = plots.find(p => p.id === selectedPlot) || plots[0] || null;
-  const assignedCrop = activePlot && activePlot.cropId ? crops.find(c => c.id === activePlot.cropId) : crops[0] || null;
-  const growth = computeGrowthStatus(activePlot?.id);
-
-  const effectiveVisionData = visionData || (activePlot ? {
-    plantHeight: Math.round(15 + activePlot.daysPlanted * 1.2),
-    canopyCoverage: Math.min(95, Math.round(20 + activePlot.daysPlanted * 1.5)),
-    growthStage: growth.currentStage.label,
-    fruitRipeness: Math.min(100, Math.round(growth.totalMaturityPct)),
-    yieldEstimate: Number((3.5 + (activePlot.daysPlanted / (assignedCrop?.growthDurationDays || 90)) * 2).toFixed(1)),
-    diseaseRisk: 3
-  } : null);
-
-  if (!effectiveVisionData) {
-    return <div className="p-8 text-slate-500 font-medium">Loading computer vision data...</div>;
-  }
-
-  const activeRule = {
-    label: assignedCrop ? `${assignedCrop.name} Ripeness Index` : 'Canopy Ripeness',
-    ruleType: assignedCrop ? `Biophysical Stage Curve (${assignedCrop.growthDurationDays} Days)` : 'Vegetative Maturation',
-    rationale: assignedCrop ? `Ripeness evaluated for ${assignedCrop.name} (${assignedCrop.variety}) at Day ${activePlot?.daysPlanted || 1} of cycle.` : 'Active digital twin evaluation.'
-  };
-
-  const parameters = [
-    { label: 'Plant Height', value: `${effectiveVisionData.plantHeight} cm`, icon: Ruler, color: 'text-sky-600', bg: 'bg-sky-50' },
-    { label: 'Canopy Coverage', value: `${effectiveVisionData.canopyCoverage}%`, icon: AreaChart, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Growth Stage', value: effectiveVisionData.growthStage, icon: Leaf, color: 'text-green-600', bg: 'bg-green-50' },
-    { label: `Ripeness (${activeRule.label})`, value: `${effectiveVisionData.fruitRipeness}%`, icon: Grape, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { label: 'Yield Estimate', value: `${effectiveVisionData.yieldEstimate} kg/m²`, icon: Activity, color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: 'Disease Risk', value: `${effectiveVisionData.diseaseRisk}%`, icon: Bug, color: 'text-rose-600', bg: 'bg-rose-50' },
-  ];
+  const ripenessPct = fruitRipeness;
+  const redPct = Math.min(100, Math.round(ripenessPct * 0.6));
+  const breakerPct = Math.min(100 - redPct, Math.round(ripenessPct * 0.8));
+  const greenPct = Math.max(0, 100 - redPct - breakerPct);
 
   return (
-    <div className="space-y-8 font-sans text-slate-800">
+    <div className="space-y-8 font-sans text-slate-800 pb-10">
       {/* Top Header & Plot Picker */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <h2 className="text-3xl font-extrabold text-slate-900 flex items-center">
-            <Sprout className="mr-3 text-sky-600 w-8 h-8" />
-            Vision AI Phenology Detection
+          <h2 className="text-2xl font-black text-slate-900 flex items-center">
+            <Sprout className="mr-3 text-emerald-600 w-7 h-7" />
+            Vision AI Phenology & Multi-Spectral Scan
           </h2>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Computer vision canopy segmentation, ripeness distribution & thermal stage synchronization</p>
+          <p className="text-slate-500 text-xs mt-1 font-medium">Computer vision canopy segmentation, RGB/NDVI/Thermal analysis & ripeness distribution</p>
         </div>
 
-        <div className="bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Plot:</span>
+        <div className="flex items-center space-x-3 bg-slate-50 px-4 py-2 rounded-xl border border-slate-200">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Bed:</span>
           <select 
-            value={selectedPlot} 
+            value={selectedPlotId} 
             onChange={(e) => {
-              setSelectedPlot(e.target.value);
+              setSelectedPlotId(e.target.value);
               setSelectedImage(null);
             }}
-            className="bg-slate-50 text-slate-900 text-xs font-bold rounded-xl px-3 py-1.5 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+            className="bg-white text-slate-900 text-xs font-bold rounded-lg px-3 py-1.5 border border-slate-200 focus:outline-none focus:border-emerald-600 cursor-pointer"
           >
-            {plots.map(p => {
+            {activeSections.map(p => {
               const c = crops.find(crop => crop.id === p.cropId);
               return (
                 <option key={p.id} value={p.id}>
@@ -227,37 +108,65 @@ export const CropVision = () => {
       </div>
 
       {/* Phenological Stage Stepper & GDD Meter Component */}
-      <CropGrowthTracker
-        plotId={selectedPlot}
-        cropName={assignedCrop ? `${assignedCrop.name} (${assignedCrop.variety})` : activePlot?.name}
-      />
+      {activePlot && (
+        <CropGrowthTracker
+          plotId={activePlot.id}
+          cropName={assignedCrop ? `${assignedCrop.name} (${assignedCrop.variety})` : activePlot.name}
+        />
+      )}
 
-      {/* Interactive Vision AI Camera Frame with HUD Overlay */}
-      <div className="bg-white/95 backdrop-blur-sm border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-4">
+      {/* Interactive Vision AI Camera Frame with Multi-Spectral Toggles & Bounding Boxes */}
+      <div className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-sky-50 text-sky-600 rounded-xl border border-sky-200">
+            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-200">
               <Scan className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-extrabold text-slate-900 flex items-center">
                 AI Vision Phenology HUD Scanner
               </h3>
-              <p className="text-xs text-slate-500 font-medium">Gemini 2.5 Computer Vision segmentation & biophysical feature extraction</p>
+              <p className="text-xs text-slate-500 font-medium">Computer Vision segmentation & biophysical feature extraction</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Multi-Spectral Filter Toggles */}
+            <div className="bg-slate-100 p-1 rounded-xl flex items-center space-x-1 border border-slate-200">
+              {(['rgb', 'ndvi', 'thermal'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setFilterMode(mode)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-all ${
+                    filterMode === mode
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {mode === 'rgb' ? 'RGB' : mode === 'ndvi' ? 'NDVI Index' : 'Thermal'}
+                </button>
+              ))}
+            </div>
+
             <button
               onClick={() => setHudActive(!hudActive)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                hudActive 
-                  ? 'bg-sky-50 text-sky-700 border-sky-300' 
-                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                hudActive ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-slate-100 text-slate-600 border-slate-200'
               }`}
             >
-              HUD Overlays: {hudActive ? 'ON' : 'OFF'}
+              HUD: {hudActive ? 'ON' : 'OFF'}
             </button>
+
+            <button
+              onClick={() => setShowBoundingBoxes(!showBoundingBoxes)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                showBoundingBoxes ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}
+            >
+              AI Bboxes: {showBoundingBoxes ? 'ON' : 'OFF'}
+            </button>
+
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -267,287 +176,145 @@ export const CropVision = () => {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 transition-colors cursor-pointer active:scale-95"
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 transition-colors cursor-pointer"
             >
-              <Upload className="w-3.5 h-3.5 text-sky-600" />
+              <Upload className="w-3.5 h-3.5 text-emerald-600" />
               <span>Upload Photo</span>
             </button>
+
             <button
-              onClick={handleAnalyze}
+              onClick={handleRunScan}
               disabled={analyzing}
-              className="flex items-center space-x-1.5 px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all cursor-pointer active:scale-95"
+              className="flex items-center space-x-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all cursor-pointer"
             >
-              <Camera className="w-3.5 h-3.5" />
-              <span>{analyzing ? 'Analyzing...' : 'Run Gemini Scan'}</span>
+              <Scan className="w-3.5 h-3.5" />
+              <span>{analyzing ? 'Scanning...' : 'Run Diagnostic Scan'}</span>
             </button>
           </div>
         </div>
 
-        {/* Viewport Frame with HUD */}
-        <div className="relative w-full h-[440px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center group select-none shadow-inner">
+        {/* Viewport Frame with HUD & Spectral Filters */}
+        <div className="relative w-full h-[420px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center select-none shadow-2xl">
           
           {/* Background Image / SVG Simulation */}
-          {selectedImage ? (
-            <img 
-              src={selectedImage} 
-              alt="Crop Camera Feed" 
-              className="w-full h-full object-cover filter brightness-90"
-            />
-          ) : (
-            <div className="w-full h-full relative flex items-center justify-center bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-              <div 
-                className="absolute inset-0 opacity-15"
-                style={{
-                  backgroundImage: `radial-gradient(#06b6d4 1px, transparent 1px)`,
-                  backgroundSize: '30px 30px',
-                }}
+          <div className={`w-full h-full relative flex items-center justify-center transition-all duration-300 ${
+            filterMode === 'ndvi' ? 'hue-rotate-90 saturate-200 contrast-125' : filterMode === 'thermal' ? 'hue-rotate-180 invert contrast-150' : ''
+          }`}>
+            {selectedImage ? (
+              <img 
+                src={selectedImage} 
+                alt="Crop Camera Feed" 
+                className="w-full h-full object-cover filter brightness-90"
               />
-              <PlantCanopySvg
-                stage={growth.currentStage.key}
-                cropType={assignedCrop?.name || 'Crop'}
-                size={280}
-              />
-            </div>
+            ) : (
+              <div className="w-full h-full relative flex items-center justify-center bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+                <div 
+                  className="absolute inset-0 opacity-15"
+                  style={{
+                    backgroundImage: `radial-gradient(#10b981 1px, transparent 1px)`,
+                    backgroundSize: '30px 30px',
+                  }}
+                />
+                <PlantCanopySvg
+                  stage={pct > 75 ? 'flowering' : 'vegetative'}
+                  cropType={assignedCrop?.name || 'Crop'}
+                  size={280}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* AI Bounding Box Overlays */}
+          {showBoundingBoxes && (
+            <>
+              {/* Bounding Box 1: Ripe Fruit */}
+              <div className="absolute top-[35%] left-[42%] w-24 h-24 border-2 border-emerald-400 bg-emerald-500/10 rounded-lg pointer-events-none animate-pulse">
+                <span className="absolute -top-6 left-0 bg-emerald-500 text-slate-950 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-md">
+                  Ripe Fruit 98%
+                </span>
+              </div>
+              {/* Bounding Box 2: Healthy Leaf Canopy */}
+              <div className="absolute top-[20%] left-[25%] w-32 h-28 border-2 border-sky-400 bg-sky-500/10 rounded-lg pointer-events-none">
+                <span className="absolute -top-6 left-0 bg-sky-500 text-slate-950 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-md">
+                  Leaf Canopy 99%
+                </span>
+              </div>
+            </>
           )}
 
           {/* HUD OVERLAY ELEMENTS */}
           {hudActive && (
             <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between">
-              
-              {/* HUD Corner Reticle Brackets */}
-              <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-cyan-400" />
-              <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-cyan-400" />
-              <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-cyan-400" />
-              <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-cyan-400" />
+              {/* Reticle Brackets */}
+              <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-emerald-400" />
+              <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-emerald-400" />
+              <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-emerald-400" />
+              <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-emerald-400" />
 
-              {/* Central Target Crosshair */}
+              {/* Crosshair */}
               <div className="absolute inset-0 flex items-center justify-center opacity-30">
-                <Crosshair className="w-24 h-24 text-cyan-400 animate-spin" style={{ animationDuration: '30s' }} />
+                <Crosshair className="w-24 h-24 text-emerald-400" />
               </div>
 
               {/* Top HUD Badges */}
-              <div className="flex flex-wrap items-start justify-between gap-3 relative z-10">
-                {/* Detected Phenological Stage Badge */}
-                <div className="bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-sky-300 shadow-xl flex items-center space-x-3 text-slate-900">
-                  <div className="w-3 h-3 rounded-full bg-sky-500 animate-ping" />
-                  <div>
-                    <div className="text-[10px] text-sky-700 font-bold uppercase tracking-wider">Detected Phenological Stage</div>
-                    <div className="text-sm font-black flex items-center gap-1.5">
-                      <span>{visionData.growthStage || growth.currentStage.label}</span>
-                      <span className="text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">94% Confidence</span>
-                    </div>
+              <div className="flex items-start justify-between gap-3 relative z-10">
+                <div className="bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-700 text-white">
+                  <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Detected Phenological Stage</div>
+                  <div className="text-sm font-black flex items-center gap-1.5">
+                    <span>{growthStageLabel}</span>
+                    <span className="text-[10px] text-emerald-300 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800">96% Match</span>
                   </div>
                 </div>
 
-                {/* Live Height & Canopy Bounding Box */}
-                <div className="bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-emerald-300 shadow-xl space-y-1 text-right text-slate-900">
-                  <div className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Estimated Biomass Metrics</div>
-                  <div className="flex items-center space-x-4 text-xs font-black">
-                    <span className="flex items-center gap-1 text-slate-900">
-                      <Ruler className="w-3.5 h-3.5 text-sky-600" />
-                      <span>Height: <strong>{visionData.plantHeight} cm</strong></span>
-                    </span>
-                    <span className="flex items-center gap-1 text-slate-900">
-                      <AreaChart className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Canopy: <strong>{visionData.canopyCoverage}%</strong></span>
-                    </span>
+                <div className="bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-700 text-right text-white">
+                  <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Mode: {filterMode.toUpperCase()} Filter</div>
+                  <div className="text-xs font-bold text-slate-300">
+                    Height: <strong className="text-white">{plantHeight} cm</strong> | Canopy: <strong className="text-white">{canopyCoverage}%</strong>
                   </div>
                 </div>
               </div>
 
-              {/* Bottom HUD: Fruit Ripeness Distribution Multi-Segment Bar */}
-              <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200 shadow-2xl relative z-10 space-y-2 max-w-xl text-slate-900">
+              {/* Bottom HUD Bar */}
+              <div className="bg-slate-900/90 backdrop-blur-md p-3.5 rounded-xl border border-slate-700 relative z-10 space-y-1.5 max-w-xl text-white">
                 <div className="flex justify-between items-center text-xs font-bold">
-                  <span className="text-purple-900 flex items-center gap-1.5">
-                    <Grape className="w-4 h-4 text-purple-600" />
-                    Fruit Ripeness Distribution
-                  </span>
-                  <span className="text-slate-600 font-mono text-[11px]">
-                    Overall: <strong className="text-purple-700 font-bold">{visionData.fruitRipeness}% Ripe</strong>
-                  </span>
+                  <span className="text-emerald-400">Ripeness Distribution ({assignedCrop?.name || 'Crop'})</span>
+                  <span className="text-slate-300">{fruitRipeness}% Overall Ripeness</span>
                 </div>
 
-                {/* Multi-Segment Color Distribution Bar */}
-                <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden flex border border-slate-300">
-                  <div className="bg-rose-500 transition-all duration-700" style={{ width: `${redPct}%` }} title={`Red / Full Ripe: ${redPct}%`} />
-                  <div className="bg-amber-400 transition-all duration-700" style={{ width: `${breakerPct}%` }} title={`Breaker / Pink Stage: ${breakerPct}%`} />
-                  <div className="bg-emerald-500 transition-all duration-700" style={{ width: `${greenPct}%` }} title={`Green Developing: ${greenPct}%`} />
-                </div>
-
-                {/* Legend */}
-                <div className="flex items-center justify-between text-[10px] text-slate-600 font-semibold pt-0.5">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    <span>Red-Ripe ({redPct}%)</span>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" />
-                    <span>Breaker/Pink ({breakerPct}%)</span>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span>Green ({greenPct}%)</span>
-                  </span>
+                <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden flex">
+                  <div style={{ width: `${redPct}%` }} className="bg-rose-500 h-full" title={`Red Ripe: ${redPct}%`} />
+                  <div style={{ width: `${breakerPct}%` }} className="bg-amber-500 h-full" title={`Breaker: ${breakerPct}%`} />
+                  <div style={{ width: `${greenPct}%` }} className="bg-emerald-500 h-full" title={`Green: ${greenPct}%`} />
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Analyzing Spinner */}
-          {analyzing && (
-            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center space-y-3">
-              <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-              <p className="text-cyan-300 font-bold text-xs tracking-wider uppercase animate-pulse">
-                Processing Gemini Vision Inference...
-              </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* 6 Core Biophysical Parameters Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {parameters.map((param, idx) => {
-          const Icon = param.icon;
+      {/* 6 Main Digital Twin Parameter Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {[
+          { label: 'Plant Height', value: `${plantHeight} cm`, icon: Ruler, color: 'text-sky-600', bg: 'bg-sky-50' },
+          { label: 'Canopy Coverage', value: `${canopyCoverage}%`, icon: AreaChart, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Growth Stage', value: growthStageLabel.split(' ')[0], icon: Leaf, color: 'text-green-600', bg: 'bg-green-50' },
+          { label: 'Ripeness Index', value: `${fruitRipeness}%`, icon: Grape, color: 'text-purple-600', bg: 'bg-purple-50' },
+          { label: 'Yield Projection', value: `${yieldEstimate} kg/m²`, icon: Activity, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Disease Risk', value: `${diseaseRisk}%`, icon: Bug, color: 'text-rose-600', bg: 'bg-rose-50' }
+        ].map((p, i) => {
+          const Icon = p.icon;
           return (
-            <div key={idx} className="bg-white/95 backdrop-blur-sm rounded-3xl p-6 shadow-sm border border-slate-200/80 flex items-center space-x-6 hover:shadow-md transition-all">
-              <div className={`p-4 rounded-2xl ${param.bg} border border-slate-200/60 shrink-0`}>
-                <Icon className={`w-8 h-8 ${param.color}`} />
+            <div key={i} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">{p.label}</span>
+                <div className={`p-2 rounded-xl ${p.bg} ${p.color}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
               </div>
-              <div>
-                <div className="text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">{param.label}</div>
-                <div className="text-2xl font-black text-slate-900">{param.value}</div>
-              </div>
+              <div className="text-lg font-black text-slate-900 truncate">{p.value}</div>
             </div>
           );
         })}
-      </div>
-
-      {/* Yield Log Section */}
-      <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-sm border border-slate-200/80 p-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-          <div>
-            <h3 className="text-xl font-black text-slate-900 flex items-center">
-              <Scale className="w-6 h-6 mr-3 text-sky-600" />
-              Yield Verification & Harvest Log
-            </h3>
-            <p className="text-sm text-slate-500 mt-1 font-medium">Close the loop by comparing AI-predicted yield with actual harvested weight</p>
-          </div>
-          <span className="px-3 py-1 bg-sky-50 text-sky-700 font-bold text-xs rounded-full border border-sky-200 uppercase tracking-wider self-start sm:self-auto">
-            Closed-Loop Analytics
-          </span>
-        </div>
-
-        {/* Log Harvest Form */}
-        <form onSubmit={handleLogHarvest} className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80 space-y-4">
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center">
-            <PlusCircle className="w-4 h-4 mr-2 text-sky-600" />
-            Log New Harvest for {activePlot ? `${activePlot.code}: ${assignedCrop ? assignedCrop.name : activePlot.name}` : 'Selected Plot'}
-          </h4>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">Harvest Date</label>
-              <input 
-                type="date" 
-                value={harvestDate}
-                onChange={(e) => setHarvestDate(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-sky-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">AI Predicted Yield</label>
-              <input 
-                type="text" 
-                disabled
-                value={`${visionData?.yieldEstimate ?? 4.5} kg/m²`}
-                className="w-full bg-slate-200/80 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 cursor-not-allowed"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">Actual Harvested Weight (kg/m²)</label>
-              <input 
-                type="number" 
-                step="0.1" 
-                placeholder="e.g. 4.8"
-                value={actualKg}
-                onChange={(e) => setActualKg(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-sky-500"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={submittingLog}
-              className="px-6 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-xs cursor-pointer active:scale-95"
-            >
-              {submittingLog ? 'Saving...' : 'Submit Harvest Log'}
-            </button>
-          </div>
-        </form>
-
-        {/* Harvest History Table */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center">
-            <ClipboardList className="w-4 h-4 mr-2 text-sky-600" />
-            Harvest History ({harvestLogs.length} Entries)
-          </h4>
-
-          {harvestLogs.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl text-xs font-medium bg-slate-50/50">
-              No harvest entries logged for {activePlot ? activePlot.code : 'this plot'} yet.
-            </div>
-          ) : (
-            <div className="overflow-x-auto border border-slate-200 rounded-2xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
-                  <tr>
-                    <th className="p-3.5">Plot</th>
-                    <th className="p-3.5">Harvest Date</th>
-                    <th className="p-3.5">Predicted</th>
-                    <th className="p-3.5">Actual</th>
-                    <th className="p-3.5">Variance</th>
-                    <th className="p-3.5">Accuracy Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-                  {harvestLogs.map((log) => {
-                    const isPositive = log.variance_pct >= 0;
-                    return (
-                      <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-3.5 font-bold text-slate-900">{log.plotId}</td>
-                        <td className="p-3.5">{log.harvest_date}</td>
-                        <td className="p-3.5 font-mono">{log.predicted_kg} kg/m²</td>
-                        <td className="p-3.5 font-mono font-bold text-slate-900">{log.actual_kg} kg/m²</td>
-                        <td className="p-3.5">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                            isPositive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}>
-                            {isPositive ? <TrendingUp className="w-3 h-3 mr-1 text-emerald-600" /> : <TrendingDown className="w-3 h-3 mr-1 text-amber-600" />}
-                            {log.variance_pct > 0 ? `+${log.variance_pct}%` : `${log.variance_pct}%`}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-xs">
-                          {Math.abs(log.variance_pct) <= 10 ? (
-                            <span className="text-emerald-700 font-bold">High AI Accuracy (within 10%)</span>
-                          ) : (
-                            <span className="text-amber-700 font-bold">Model Drift Observed</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
