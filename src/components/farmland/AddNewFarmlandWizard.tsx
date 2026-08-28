@@ -410,8 +410,8 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                     type="button"
                     onClick={() => setSectionCount(n)}
                     className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${sectionCount === n
-                        ? 'bg-emerald-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                   >
                     {n} {n === 1 ? 'Section' : 'Sections'}
@@ -438,10 +438,10 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
 
             {/* Live Running Total Progress Bar & Hard Validation State */}
             <div className={`p-4 rounded-2xl border transition-all ${isExactMatch
-                ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
-                : diff > 0
-                  ? 'bg-rose-50 border-rose-300 text-rose-950'
-                  : 'bg-sky-50 border-sky-300 text-sky-950'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+              : diff > 0
+                ? 'bg-rose-50 border-rose-300 text-rose-950'
+                : 'bg-sky-50 border-sky-300 text-sky-950'
               }`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                 <div className="flex items-center space-x-2">

@@ -7,6 +7,10 @@
   "database": {
     "rules": "database.rules.json"
   },
+  "firestore": {
+    "database": "ai-studio-agritwincropdigi-372ea700-9482-4e27-9cbd-81501a2db50d",
+    "rules": "firestore.rules"
+  },
   "emulators": {
     "database": {
       "port": 9000

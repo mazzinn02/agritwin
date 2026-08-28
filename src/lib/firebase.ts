@@ -10,19 +10,62 @@ import {
   User
 } from 'firebase/auth';
 import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  collection 
+  initializeFirestore,
+  doc as fsDoc, 
+  setDoc as fsSetDoc, 
+  getDoc as fsGetDoc, 
+  getDocs as fsGetDocs, 
+  collection as fsCollection,
+  writeBatch as fsWriteBatch,
+  onSnapshot as fsOnSnapshot,
+  query as fsQuery,
+  orderBy as fsOrderBy,
+  limit as fsLimit
 } from 'firebase/firestore';
+import { TelemetryObservation } from '../types';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // 1. Initialize Firebase Client App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
-export const firestoreDb = getFirestore(app);
+
+// 2. Initialize Explicit Named Firestore Database
+export const FIRESTORE_DATABASE_ID = 'ai-studio-agritwincropdigi-372ea700-9482-4e27-9cbd-81501a2db50d';
+export const firestoreDb = initializeFirestore(app, {}, FIRESTORE_DATABASE_ID);
+
+// ─── DIAGNOSTIC: items 1–4, 7 ────────────────────────────────────────────────
+console.log('[FIREBASE DIAGNOSTIC] 1. app.options.projectId :', app.options.projectId);
+console.log('[FIREBASE DIAGNOSTIC] 2. app.options.appId     :', app.options.appId);
+console.log('[FIREBASE DIAGNOSTIC] 3. FIRESTORE_DATABASE_ID :', FIRESTORE_DATABASE_ID);
+console.log('[FIREBASE DIAGNOSTIC] 4. auth.app.options.projectId (from auth):', auth.app.options.projectId);
+console.log('[FIREBASE DIAGNOSTIC] 5. firebaseConfig.projectId (json):', firebaseConfig.projectId);
+console.log('[FIREBASE DIAGNOSTIC] 7. Firestore init call   : initializeFirestore(app, {}, "' + FIRESTORE_DATABASE_ID + '")');
+console.log('[FIREBASE DIAGNOSTIC] firestoreDb._databaseId  :', (firestoreDb as any)._databaseId ?? (firestoreDb as any)._delegate?._databaseId ?? 'unavailable');
+
+// ─── DIAGNOSTIC: item 8 – async read against named database ─────────────────
+// Call runFirestoreDiagnostic() from anywhere to trigger the test read.
+export async function runFirestoreDiagnostic(): Promise<void> {
+  console.log('[FIRESTORE DIAGNOSTIC] Starting read test against database:', FIRESTORE_DATABASE_ID);
+  try {
+    const colRef = fsCollection(firestoreDb, 'telemetry_observations');
+    const q = fsQuery(colRef, fsLimit(1));
+    const snap = await fsGetDocs(q);
+    console.log('[FIRESTORE DIAGNOSTIC] Read SUCCESS – docs returned:', snap.size);
+    snap.forEach(d => console.log('[FIRESTORE DIAGNOSTIC] doc id:', d.id, 'data:', d.data()));
+  } catch (err: any) {
+    // ─── DIAGNOSTIC: item 9 – log COMPLETE error, no suppression ───────────
+    console.error('[FIRESTORE DIAGNOSTIC] *** READ FAILED ***');
+    console.error('[FIRESTORE DIAGNOSTIC] error.name   :', err?.name);
+    console.error('[FIRESTORE DIAGNOSTIC] error.code   :', err?.code);
+    console.error('[FIRESTORE DIAGNOSTIC] error.message:', err?.message);
+    console.error('[FIRESTORE DIAGNOSTIC] full error   :', err);
+    throw err; // re-throw so callers see the real error
+  }
+}
+
+// Auto-run diagnostic once on module load so the error surfaces in the console immediately
+runFirestoreDiagnostic();
+// ─────────────────────────────────────────────────────────────────────────────
 
 // User Profile Types
 export type UserRole = 'admin' | 'farmer';
@@ -35,6 +78,8 @@ export interface UserProfile {
   assigned_farm_ids: string[];
   created_at: string;
 }
+
+const USERS_STORAGE_KEY = 'agritwin_users_cache';
 
 const DEFAULT_USERS: Record<string, UserProfile> = {
   'usr_admin_001': {
@@ -84,8 +129,8 @@ const setCachedUser = (profile: UserProfile) => {
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
   setCachedUser(profile);
   try {
-    const userDocRef = doc(firestoreDb, 'users', profile.uid);
-    await setDoc(userDocRef, {
+    const userDocRef = fsDoc(firestoreDb, 'users', profile.uid);
+    await fsSetDoc(userDocRef, {
       uid: profile.uid,
       email: profile.email,
       full_name: profile.full_name,
@@ -93,23 +138,24 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
       assigned_farm_ids: profile.assigned_farm_ids || [],
       created_at: profile.created_at || new Date().toISOString()
     }, { merge: true });
+    console.log(`[Firestore:${FIRESTORE_DATABASE_ID}] Saved user profile: ${profile.uid}`);
   } catch (err) {
-    console.warn('Firestore setDoc notice (using local persistence):', err);
+    console.warn(`[Firestore:${FIRESTORE_DATABASE_ID}] setDoc user notice:`, err);
   }
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const cached = getCachedUsers()[uid];
   try {
-    const userDocRef = doc(firestoreDb, 'users', uid);
-    const snap = await getDoc(userDocRef);
+    const userDocRef = fsDoc(firestoreDb, 'users', uid);
+    const snap = await fsGetDoc(userDocRef);
     if (snap.exists()) {
       const data = snap.data() as UserProfile;
       setCachedUser(data);
       return data;
     }
   } catch (err) {
-    console.warn('Firestore getDoc notice (falling back to cache):', err);
+    console.warn(`[Firestore:${FIRESTORE_DATABASE_ID}] getDoc user notice:`, err);
   }
   return cached || null;
 }
@@ -117,8 +163,8 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 export async function getAllUsers(): Promise<UserProfile[]> {
   const cached = Object.values(getCachedUsers());
   try {
-    const usersCol = collection(firestoreDb, 'users');
-    const snap = await getDocs(usersCol);
+    const usersCol = fsCollection(firestoreDb, 'users');
+    const snap = await fsGetDocs(usersCol);
     if (!snap.empty) {
       const list: UserProfile[] = [];
       snap.forEach(docSnap => {
@@ -129,17 +175,18 @@ export async function getAllUsers(): Promise<UserProfile[]> {
       return list;
     }
   } catch (err) {
-    console.warn('Firestore getDocs notice (falling back to cache):', err);
+    console.warn(`[Firestore:${FIRESTORE_DATABASE_ID}] getDocs users notice:`, err);
   }
   return cached;
 }
 
 export async function saveFarmRecord(farmData: any): Promise<void> {
   try {
-    const farmDocRef = doc(firestoreDb, 'farms', farmData.id);
-    await setDoc(farmDocRef, farmData, { merge: true });
+    const farmDocRef = fsDoc(firestoreDb, 'farms', farmData.id);
+    await fsSetDoc(farmDocRef, farmData, { merge: true });
+    console.log(`[Firestore:${FIRESTORE_DATABASE_ID}] Saved farm record: ${farmData.id}`);
   } catch (err) {
-    console.warn('Firestore setDoc farm notice:', err);
+    console.warn(`[Firestore:${FIRESTORE_DATABASE_ID}] setDoc farm notice:`, err);
   }
   try {
     await set(ref(db, `farms/${farmData.id}`), farmData);
@@ -150,15 +197,117 @@ export async function saveFarmRecord(farmData: any): Promise<void> {
 
 export async function saveSectionPlotRecord(plotData: any): Promise<void> {
   try {
-    const plotDocRef = doc(firestoreDb, 'plots', plotData.id);
-    await setDoc(plotDocRef, plotData, { merge: true });
+    const plotDocRef = fsDoc(firestoreDb, 'plots', plotData.id);
+    await fsSetDoc(plotDocRef, plotData, { merge: true });
+    console.log(`[Firestore:${FIRESTORE_DATABASE_ID}] Saved plot record: ${plotData.id}`);
   } catch (err) {
-    console.warn('Firestore setDoc plot notice:', err);
+    console.warn(`[Firestore:${FIRESTORE_DATABASE_ID}] setDoc plot notice:`, err);
   }
   try {
     await set(ref(db, `plots/${plotData.id}`), plotData);
   } catch (err) {
     console.warn('Realtime DB plot set notice:', err);
+  }
+}
+
+// ----------------------------------------------------
+// Real Firestore Telemetry Observations Persistence
+// Using Named Firestore Database: ai-studio-agritwincropdigi-372ea700-9482-4e27-9cbd-81501a2db50d
+// ----------------------------------------------------
+
+export async function saveTelemetryObservationToFirestore(obs: TelemetryObservation): Promise<void> {
+  try {
+    const docRef = fsDoc(firestoreDb, 'telemetry_observations', obs.id);
+    await fsSetDoc(docRef, obs, { merge: true });
+    console.log(`[Firestore:${FIRESTORE_DATABASE_ID}] Saved observation: ${obs.id}`);
+  } catch (err: any) {
+    console.error('[FIRESTORE WRITE ERROR]', {
+      name: err?.name,
+      code: err?.code,
+      message: err?.message,
+      error: err
+    });
+    throw err;
+  }
+}
+
+export async function saveTelemetryBatchToFirestore(observations: TelemetryObservation[]): Promise<void> {
+  if (!observations || observations.length === 0) return;
+  try {
+    const batch = fsWriteBatch(firestoreDb);
+    observations.forEach(obs => {
+      const docRef = fsDoc(firestoreDb, 'telemetry_observations', obs.id);
+      batch.set(docRef, obs, { merge: true });
+    });
+    await batch.commit();
+    console.log('[FIRESTORE WRITE SUCCESS]', {
+      databaseId: FIRESTORE_DATABASE_ID,
+      collection: 'telemetry_observations',
+      count: observations.length,
+      ids: observations.map(o => o.id)
+    });
+  } catch (err: any) {
+    console.error('[FIRESTORE WRITE ERROR]', {
+      name: err?.name,
+      code: err?.code,
+      message: err?.message,
+      error: err
+    });
+    throw err;
+  }
+}
+
+// ─── DIAGNOSTIC: testFirestoreWrite — writes one doc to verify write path ─────
+export async function testFirestoreWrite(): Promise<void> {
+  const testId = `diag_write_${Date.now()}`;
+  console.log('[FIRESTORE WRITE DIAGNOSTIC] Attempting test write to telemetry_observations, doc id:', testId);
+  try {
+    const batch = fsWriteBatch(firestoreDb);
+    const docRef = fsDoc(firestoreDb, 'telemetry_observations', testId);
+    batch.set(docRef, {
+      id: testId,
+      test: true,
+      dataSource: 'DIAGNOSTIC',
+      databaseId: FIRESTORE_DATABASE_ID,
+      createdAt: new Date().toISOString()
+    });
+    await batch.commit();
+    console.log('[FIRESTORE WRITE DIAGNOSTIC] ✅ Test write SUCCESS — doc id:', testId);
+  } catch (err: any) {
+    console.error('[FIRESTORE WRITE DIAGNOSTIC] ❌ Test write FAILED', {
+      name: err?.name,
+      code: err?.code,
+      message: err?.message,
+      error: err
+    });
+  }
+}
+
+// Auto-run write diagnostic once on module load
+testFirestoreWrite();
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function subscribeToFirestoreTelemetry(
+  onUpdate: (observations: TelemetryObservation[]) => void
+): () => void {
+  try {
+    const colRef = fsCollection(firestoreDb, 'telemetry_observations');
+    const q = fsQuery(colRef, fsOrderBy('measurementTimestamp', 'desc'), fsLimit(500));
+    
+    return fsOnSnapshot(q, (snapshot) => {
+      const list: TelemetryObservation[] = [];
+      snapshot.forEach(docSnap => {
+        list.push(docSnap.data() as TelemetryObservation);
+      });
+      if (list.length > 0) {
+        onUpdate(list);
+      }
+    }, (error) => {
+      console.warn(`[Firestore:${FIRESTORE_DATABASE_ID}] onSnapshot telemetry notice:`, error);
+    });
+  } catch (err) {
+    console.warn(`[Firestore:${FIRESTORE_DATABASE_ID}] subscribeToFirestoreTelemetry notice:`, err);
+    return () => {};
   }
 }
 
@@ -365,9 +514,12 @@ export const remove = async (dbRef: any) => {
   mockDb.notify(path);
 };
 
-export const query = (dbRef: any, ...queryConstraints: any[]) => {
+export const rtdbQuery = (dbRef: any, ...queryConstraints: any[]) => {
   return { path: dbRef.path, _isQuery: true, queryConstraints };
 };
+
+// Export query for RTDB backward compatibility with custom _isQuery tag
+export const query = rtdbQuery;
 
 export const orderByChild = (path: string) => {
   return { type: 'orderByChild', path };

@@ -63,6 +63,7 @@ export interface PlotBed {
   isWatering?: boolean;
   hvacActive?: boolean;
   createdAt?: string;
+  farmId?: string; // set by farm-creation flow; required for telemetry ownership
 }
 
 export interface IoTSensor {
