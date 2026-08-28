@@ -2,16 +2,17 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ref, get, query, orderByChild, startAt, endAt } from '../lib/firebase';
 import { db } from '../lib/firebase';
 import { fetchComparisonData, saveComparisonSession } from '../lib/comparison-helper';
-import { 
-  LineChart as RechartsLineChart, 
-  Line, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
+import { STAGES_ORDER } from '../lib/gdd-calculator';
+import {
+  LineChart as RechartsLineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
   ResponsiveContainer,
   ReferenceLine,
   Area,
@@ -20,6 +21,24 @@ import {
 import { useAgriStore } from '../context/AgriStore';
 import { PrototypeModeBanner } from '../components/common/PrototypeModeBanner';
 import { DataSourceBadge } from '../components/common/DataSourceBadge';
+import { CropGrowthTracker } from '../components/dashboard/CropGrowthTracker';
+import { 
+  Flame, 
+  Filter, 
+  Check, 
+  BarChart2, 
+  LineChart as LineChartIcon,
+  TrendingUp, 
+  Droplet, 
+  Thermometer, 
+  Download, 
+  Save, 
+  CheckCircle2, 
+  Layers, 
+  Sprout, 
+  Calendar, 
+  Zap 
+} from 'lucide-react';
 
 const PARAMETERS = [
   { id: 'airTemp', name: 'Air Temp (°C)', color: '#ef4444' },
@@ -104,9 +123,8 @@ const PopoverDropdown = ({ label, value, options, onChange, multi = false }: any
               <div
                 key={opt.id}
                 onClick={() => toggleOption(opt.id)}
-                className={`flex items-center justify-between px-3 py-2 text-xs rounded-xl cursor-pointer transition-colors ${
-                  isSelected ? 'bg-sky-50 text-sky-700 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-50'
-                }`}
+                className={`flex items-center justify-between px-3 py-2 text-xs rounded-xl cursor-pointer transition-colors ${isSelected ? 'bg-sky-50 text-sky-700 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
               >
                 <span>{opt.name}</span>
                 {isSelected && <Check className="w-4 h-4 text-sky-600" />}
@@ -171,8 +189,21 @@ export const Analytics: React.FC = () => {
   }, [activePlot, crops]);
 
   const growthStatus = useMemo(() => {
-    return computeGrowthStatus(activePlot?.id);
-  }, [activePlot?.id]);
+    const totalDurationDays = assignedCrop?.growthDurationDays || 90;
+    const targetMaturityGdd = (assignedCrop as any)?.targetMaturityGdd || 1350;
+
+    return {
+      totalDurationDays,
+      dap: activePlot?.daysPlanted || 30,
+      dailyGddRate: 12.5,
+      targetMaturityGdd,
+      stagesList: STAGES_ORDER.map((s, idx) => ({
+        key: s.key,
+        label: s.label,
+        maxGdd: Math.round(targetMaturityGdd * (idx === 0 ? 0.15 : idx === 1 ? 0.40 : idx === 2 ? 0.65 : idx === 3 ? 0.88 : 1.0))
+      }))
+    };
+  }, [assignedCrop, activePlot]);
 
   const gddProjectionData = useMemo(() => {
     const totalDays = growthStatus.totalDurationDays || 90;
@@ -183,7 +214,7 @@ export const Analytics: React.FC = () => {
     const points = [];
     for (let day = 1; day <= totalDays; day++) {
       const baselineGdd = +((day / totalDays) * targetGdd).toFixed(1);
-      
+
       let actualOrProjectedGdd: number;
       if (day <= currentDap) {
         actualOrProjectedGdd = +(day * dailyPace * (0.95 + Math.sin(day * 0.3) * 0.05)).toFixed(1);
@@ -294,19 +325,19 @@ export const Analytics: React.FC = () => {
 
         {/* Mode Selector */}
         <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
-          <button 
+          <button
             onClick={() => setMode('Single')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${mode === 'Single' ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Single Plot
           </button>
-          <button 
+          <button
             onClick={() => setMode('Compare')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${mode === 'Compare' ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Compare Plots
           </button>
-          <button 
+          <button
             onClick={() => setMode('GrowthGDD')}
             className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${mode === 'GrowthGDD' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
           >
@@ -330,14 +361,14 @@ export const Analytics: React.FC = () => {
       {/* ================= VIEW 1 & 2: TELEMETRY CHARTS ================= */}
       {mode !== 'GrowthGDD' && (
         <div className="bg-white/95 backdrop-blur-sm p-6 rounded-3xl shadow-sm border border-slate-200/80 space-y-6">
-          
+
           {/* Filter Pills */}
           <div className="flex flex-wrap items-center gap-3 pb-4 border-b border-slate-200">
             {mode === 'Single' ? (
               <>
                 <PopoverDropdown label="Plot" value={selectedPlot} options={plotOptions} onChange={setSelectedPlot} />
                 <PopoverDropdown label="Parameters" value={selectedParams} options={PARAMETERS} onChange={setSelectedParams} multi={true} />
-                
+
                 {/* Quick Time Range Pills */}
                 <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                   <button
@@ -374,12 +405,12 @@ export const Analytics: React.FC = () => {
                 <PopoverDropdown label="Plot A" value={comparePlot1} options={plotOptions} onChange={setComparePlot1} />
                 <PopoverDropdown label="Plot B" value={comparePlot2} options={plotOptions} onChange={setComparePlot2} />
                 <PopoverDropdown label="Parameter" value={compareParam} options={PARAMETERS} onChange={setCompareParam} />
-                
+
                 <div className="ml-auto flex items-center space-x-2">
-                  <input 
-                    type="text" 
-                    placeholder="Session Name..." 
-                    value={sessionName} 
+                  <input
+                    type="text"
+                    placeholder="Session Name..."
+                    value={sessionName}
                     onChange={e => setSessionName(e.target.value)}
                     className="text-xs bg-slate-50 text-slate-800 border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:ring-2 focus:ring-sky-500 font-medium"
                   />
@@ -392,7 +423,7 @@ export const Analytics: React.FC = () => {
 
             <div className="ml-auto flex bg-slate-100 rounded-xl p-1 border border-slate-200">
               <button onClick={() => setChartType('line')} className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${chartType === 'line' ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-500'}`}>
-                <LineChart className="w-3.5 h-3.5 mr-1.5" /> Line
+                <LineChartIcon className="w-3.5 h-3.5 mr-1.5" /> Line
               </button>
               <button onClick={() => setChartType('bar')} className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${chartType === 'bar' ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-500'}`}>
                 <BarChart2 className="w-3.5 h-3.5 mr-1.5" /> Bar
@@ -425,7 +456,7 @@ export const Analytics: React.FC = () => {
           {/* Chart Area */}
           <div className="h-[480px]">
             {loading && data.length === 0 ? (
-               <div className="h-full flex items-center justify-center text-slate-400 font-medium">Loading telemetry history...</div>
+              <div className="h-full flex items-center justify-center text-slate-400 font-medium">Loading telemetry history...</div>
             ) : data.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 {chartType === 'line' ? (
@@ -477,7 +508,7 @@ export const Analytics: React.FC = () => {
       {/* ================= VIEW 3: GROWTH STAGE HISTORY & GDD PROJECTION ================= */}
       {mode === 'GrowthGDD' && (
         <div className="space-y-6">
-          
+
           {/* Plot Picker Pill */}
           <div className="flex items-center space-x-3 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Plot to Analyze:</span>
@@ -542,77 +573,77 @@ export const Analytics: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis dataKey="day" stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} unit=" GDD" domain={[0, growthStatus.targetMaturityGdd + 100]} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', color: '#0F172A', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     formatter={(val: any, name: string) => [`${val} GDD`, name]}
                   />
                   <Legend verticalAlign="top" height={36} />
 
                   {/* Stage Transition Checkpoints (Reference Lines) */}
-                  <ReferenceLine 
-                    y={Math.round(growthStatus.targetMaturityGdd * 0.15)} 
-                    stroke="#10b981" 
-                    strokeDasharray="4 4" 
-                    label={{ value: 'Vegetative', fill: '#047857', fontSize: 10, position: 'insideTopLeft' }} 
+                  <ReferenceLine
+                    y={Math.round(growthStatus.targetMaturityGdd * 0.15)}
+                    stroke="#10b981"
+                    strokeDasharray="4 4"
+                    label={{ value: 'Vegetative', fill: '#047857', fontSize: 10, position: 'insideTopLeft' }}
                   />
-                  <ReferenceLine 
-                    y={Math.round(growthStatus.targetMaturityGdd * 0.40)} 
-                    stroke="#0284c7" 
-                    strokeDasharray="4 4" 
-                    label={{ value: 'Flowering', fill: '#0369a1', fontSize: 10, position: 'insideTopLeft' }} 
+                  <ReferenceLine
+                    y={Math.round(growthStatus.targetMaturityGdd * 0.40)}
+                    stroke="#0284c7"
+                    strokeDasharray="4 4"
+                    label={{ value: 'Flowering', fill: '#0369a1', fontSize: 10, position: 'insideTopLeft' }}
                   />
-                  <ReferenceLine 
-                    y={Math.round(growthStatus.targetMaturityGdd * 0.65)} 
-                    stroke="#9333ea" 
-                    strokeDasharray="4 4" 
-                    label={{ value: 'Fruit Set', fill: '#7e22ce', fontSize: 10, position: 'insideTopLeft' }} 
+                  <ReferenceLine
+                    y={Math.round(growthStatus.targetMaturityGdd * 0.65)}
+                    stroke="#9333ea"
+                    strokeDasharray="4 4"
+                    label={{ value: 'Fruit Set', fill: '#7e22ce', fontSize: 10, position: 'insideTopLeft' }}
                   />
-                  <ReferenceLine 
-                    y={Math.round(growthStatus.targetMaturityGdd * 0.88)} 
-                    stroke="#d97706" 
-                    strokeWidth={2} 
-                    label={{ value: 'Harvest Maturity', fill: '#b45309', fontSize: 10, position: 'insideTopLeft' }} 
+                  <ReferenceLine
+                    y={Math.round(growthStatus.targetMaturityGdd * 0.88)}
+                    stroke="#d97706"
+                    strokeWidth={2}
+                    label={{ value: 'Harvest Maturity', fill: '#b45309', fontSize: 10, position: 'insideTopLeft' }}
                   />
 
                   {/* Current Day Reference Line */}
-                  <ReferenceLine 
-                    x={`Day ${growthStatus.dap}`} 
-                    stroke="#e11d48" 
+                  <ReferenceLine
+                    x={`Day ${growthStatus.dap}`}
+                    stroke="#e11d48"
                     strokeWidth={2}
-                    label={{ value: `Today (Day ${growthStatus.dap})`, fill: '#be123c', fontSize: 11, position: 'top' }} 
+                    label={{ value: `Today (Day ${growthStatus.dap})`, fill: '#be123c', fontSize: 11, position: 'top' }}
                   />
 
                   {/* Baseline Target Curve */}
-                  <Line 
-                    type="monotone" 
-                    dataKey="baselineGdd" 
-                    name="Ideal Baseline GDD Curve" 
-                    stroke="#94a3b8" 
-                    strokeWidth={2} 
-                    strokeDasharray="5 5" 
-                    dot={false} 
+                  <Line
+                    type="monotone"
+                    dataKey="baselineGdd"
+                    name="Ideal Baseline GDD Curve"
+                    stroke="#94a3b8"
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={false}
                   />
 
                   {/* Actual Recorded GDD */}
-                  <Area 
-                    type="monotone" 
-                    dataKey="actualGdd" 
-                    name="Actual Accumulated GDD" 
-                    stroke="#0284c7" 
-                    strokeWidth={3.5} 
-                    fillOpacity={1} 
-                    fill="url(#lightActualGddArea)" 
+                  <Area
+                    type="monotone"
+                    dataKey="actualGdd"
+                    name="Actual Accumulated GDD"
+                    stroke="#0284c7"
+                    strokeWidth={3.5}
+                    fillOpacity={1}
+                    fill="url(#lightActualGddArea)"
                     dot={{ r: 3, fill: '#0284c7' }}
                     activeDot={{ r: 6 }}
                   />
 
                   {/* Projected Future GDD */}
-                  <Line 
-                    type="monotone" 
-                    dataKey="projectedGdd" 
-                    name="Projected Thermal Trajectory" 
-                    stroke="#d97706" 
-                    strokeWidth={3} 
+                  <Line
+                    type="monotone"
+                    dataKey="projectedGdd"
+                    name="Projected Thermal Trajectory"
+                    stroke="#d97706"
+                    strokeWidth={3}
                     strokeDasharray="3 3"
                     dot={false}
                   />

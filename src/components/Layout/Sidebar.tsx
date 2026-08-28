@@ -26,7 +26,8 @@ import {
   Building2,
   Radio,
   BrainCircuit,
-  Bot
+  Bot,
+  TableProperties
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -214,6 +215,18 @@ export const Sidebar: React.FC = () => {
               >
                 <Radio className="w-4 h-4 text-sky-400" />
                 <span>My Sensors</span>
+              </NavLink>
+
+              <NavLink
+                to="/telemetry-explorer"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-teal-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
+              >
+                <TableProperties className="w-4 h-4 text-teal-400" />
+                <span>Telemetry Explorer</span>
               </NavLink>
             </div>
           )}

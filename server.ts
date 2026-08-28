@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import https from "https";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -8,7 +9,7 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = 3001;
 
   // JSON payload parser
   app.use(express.json({ limit: "20mb" }));
@@ -258,6 +259,110 @@ Respond strictly in valid JSON format with the following JSON structure:
       });
     }
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // POST /api/telemetry
+  // Writes TelemetryObservation[] to Firestore via the REST API using
+  // Node.js https.request (bypasses native fetch / WebChannel issues).
+  // ─────────────────────────────────────────────────────────────────────────────
+  {
+    const FS_PROJECT_ID  = "unified-correlate-hxctm";
+    const FS_DATABASE_ID = "ai-studio-agritwincropdigi-372ea700-9482-4e27-9cbd-81501a2db50d";
+    const FS_API_KEY     = "AIzaSyCDQYt6IuskPWbzEWLqHUrVjld25ha-17A";
+
+    /** Convert a JS value → Firestore REST typed field value */
+    function toFsValue(v: any): any {
+      if (v === null || v === undefined) return { nullValue: null };
+      if (typeof v === "boolean")        return { booleanValue: v };
+      if (typeof v === "number")         return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+      if (typeof v === "string")         return { stringValue: v };
+      if (Array.isArray(v))             return { arrayValue: { values: v.map(toFsValue) } };
+      if (typeof v === "object") {
+        const fields: Record<string, any> = {};
+        for (const [k, val] of Object.entries(v)) fields[k] = toFsValue(val);
+        return { mapValue: { fields } };
+      }
+      return { stringValue: String(v) };
+    }
+
+    function toFsDoc(obj: Record<string, any>) {
+      const fields: Record<string, any> = {};
+      for (const [k, v] of Object.entries(obj)) fields[k] = toFsValue(v);
+      return { fields };
+    }
+
+    /** PATCH one Firestore document via Node https.request — no fetch, no WebChannel */
+    function fsRestPatch(docId: string, body: object): Promise<{ ok: boolean; status: number; text: string }> {
+      return new Promise((resolve) => {
+        const payload = JSON.stringify(body);
+        const path = `/v1/projects/${FS_PROJECT_ID}/databases/${FS_DATABASE_ID}/documents/telemetry_observations/${encodeURIComponent(docId)}?key=${FS_API_KEY}`;
+        const options = {
+          hostname: "firestore.googleapis.com",
+          port: 443,
+          path,
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+          },
+        };
+        const req = https.request(options, (res) => {
+          let data = "";
+          res.on("data", (chunk) => { data += chunk; });
+          res.on("end", () => {
+            resolve({ ok: (res.statusCode ?? 500) < 300, status: res.statusCode ?? 500, text: data });
+          });
+        });
+        req.on("error", (err) => {
+          resolve({ ok: false, status: 0, text: err.message });
+        });
+        req.write(payload);
+        req.end();
+      });
+    }
+
+    app.post("/api/telemetry", async (req, res) => {
+      const { observations } = req.body as { observations: Record<string, any>[] };
+
+      if (!Array.isArray(observations) || observations.length === 0) {
+        return res.status(400).json({ success: false, error: "No observations provided." });
+      }
+
+      const writeErrors: string[] = [];
+      let written = 0;
+
+      await Promise.all(
+        observations.map(async (obs) => {
+          const result = await fsRestPatch(obs.id, toFsDoc(obs));
+          if (result.ok) {
+            written++;
+          } else {
+            writeErrors.push(`${obs.id}: HTTP ${result.status} — ${result.text.slice(0, 200)}`);
+          }
+        })
+      );
+
+      if (writeErrors.length > 0) {
+        console.error("[FIRESTORE DEMO WRITE ERROR]", {
+          status: "partial_failure",
+          code: "REST_WRITE_ERROR",
+          message: writeErrors.join(" | "),
+        });
+      }
+
+      if (written === 0) {
+        return res.status(500).json({ success: false, error: "All Firestore writes failed.", details: writeErrors });
+      }
+
+      console.log("[FIRESTORE DEMO WRITE SUCCESS]", {
+        databaseId: FS_DATABASE_ID,
+        collection: "telemetry_observations",
+        count: written,
+      });
+
+      return res.json({ success: true, count: written });
+    });
+  }
 
   // Vite middleware in dev mode vs static serve in prod
   if (process.env.NODE_ENV !== "production") {

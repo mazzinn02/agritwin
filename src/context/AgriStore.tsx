@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { Crop, Farmland, PlotBed, UserProfile, AuditLogEntry, TelemetryObservation } from '../types';
+import { saveTelemetryObservationToFirestore, subscribeToFirestoreTelemetry } from '../lib/firebase';
+import { telemetrySimulator } from '../services/telemetrySimulator';
 
 export const STORE_KEYS = {
   CROPS: 'agritwin_crops',
@@ -9,7 +11,8 @@ export const STORE_KEYS = {
   AUDIT_LOGS: 'agritwin_audit_logs',
   TELEMETRY_OBSERVATIONS: 'agritwin_telemetry_observations',
   ACTIVE_FARM_ID: 'agritwin_active_farm_id',
-  CURRENT_USER: 'agritwin_current_user_profile'
+  CURRENT_USER: 'agritwin_current_user_profile',
+  DEMO_TELEMETRY_ACTIVE: 'agritwin_demo_telemetry_active'
 } as const;
 
 // 1. Seed Crop Cultivars
@@ -106,18 +109,19 @@ export const SEED_SECTIONS: PlotBed[] = [
   {
     id: 'sec_a_tomato',
     code: 'SEC-A',
-    name: 'Section A - Tomato (Sarpan F1-STH-520)',
+    name: 'Section A - Tomato (Sarpan F1)',
     area: 5,
     areaUnit: 'acres',
     areaSqm: 20234.3,
     cropId: 'crop_tomato_sarpan',
+    farmId: 'farm_iiit_dharwad',
     sensorNodeId: 'NODE-01',
     sensorId: 'NODE-01',
     soilMoisture: 66.9,
     airTemp: 24.2,
     soilPh: 6.5,
-    parLux: 680,
-    daysPlanted: 42,
+    parLux: 850,
+    daysPlanted: 45,
     isWatering: false,
     hvacActive: false,
     createdAt: new Date().toISOString()
@@ -130,12 +134,13 @@ export const SEED_SECTIONS: PlotBed[] = [
     areaUnit: 'acres',
     areaSqm: 20234.3,
     cropId: 'crop_chilli_byadgi',
+    farmId: 'farm_iiit_dharwad',
     sensorNodeId: 'NODE-02',
     sensorId: 'NODE-02',
     soilMoisture: 54.2,
     airTemp: 26.5,
-    soilPh: 6.4,
-    parLux: 720,
+    soilPh: 6.8,
+    parLux: 920,
     daysPlanted: 60,
     isWatering: false,
     hvacActive: false,
@@ -144,11 +149,12 @@ export const SEED_SECTIONS: PlotBed[] = [
   {
     id: 'sec_c_cotton',
     code: 'SEC-C',
-    name: 'Section C - Cotton (Bt-Hybrid RCH-2)',
+    name: 'Section C - Bt-Cotton (RCH-2)',
     area: 5,
     areaUnit: 'acres',
     areaSqm: 20234.3,
     cropId: 'crop_cotton_rch',
+    farmId: 'farm_iiit_dharwad',
     sensorNodeId: 'NODE-03',
     sensorId: 'NODE-03',
     soilMoisture: 48.0,
@@ -168,6 +174,7 @@ export const SEED_SECTIONS: PlotBed[] = [
     areaUnit: 'acres',
     areaSqm: 20234.3,
     cropId: 'crop_corn_sugar',
+    farmId: 'farm_iiit_dharwad',
     sensorNodeId: 'NODE-04',
     sensorId: 'NODE-04',
     soilMoisture: 62.5,
@@ -286,6 +293,8 @@ interface AgriStoreContextType {
   currentUser: UserProfile | null;
   isAdmin: boolean;
   isWorker: boolean;
+  isDemoTelemetryActive: boolean;
+  toggleDemoTelemetry: (enable: boolean) => void;
   setCurrentUser: (u: UserProfile | null) => void;
   selectFarmland: (farmId: string) => void;
   addFarmland: (farmData: Omit<Farmland, 'id' | 'createdAt'>, sectionsData: Array<Partial<PlotBed> & { code: string; name: string; area: number; cropId?: string | null }>) => void;
@@ -318,10 +327,40 @@ const loadInitialState = <T,>(key: string, seed: T): T => {
   }
 };
 
+// ── One-time migration: stamp farmId onto any stored plots that are missing it.
+// Maps known seed plot IDs → their owning farm ID so existing localStorage
+// data gets repaired without deleting any user-created plots.
+const SEED_PLOT_FARM_MAP: Record<string, string> = {
+  sec_a_tomato: 'farm_iiit_dharwad',
+  sec_b_chilli: 'farm_iiit_dharwad',
+  sec_c_cotton: 'farm_iiit_dharwad',
+  sec_d_corn:   'farm_iiit_dharwad',
+};
+
+const migratePlotFarmIds = (plots: PlotBed[]): PlotBed[] => {
+  let patched = false;
+  const result = plots.map(p => {
+    if (!p.farmId && SEED_PLOT_FARM_MAP[p.id]) {
+      patched = true;
+      return { ...p, farmId: SEED_PLOT_FARM_MAP[p.id] };
+    }
+    return p;
+  });
+  if (patched) {
+    console.log('[FARM RELATIONSHIP] Migrated stored plots — stamped missing farmId values.');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORE_KEYS.PLOTS, JSON.stringify(result));
+    }
+  }
+  return result;
+};
+
 export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [crops, setCrops] = useState<Crop[]>(() => loadInitialState(STORE_KEYS.CROPS, SEED_CROPS));
   const [farmlands, setFarmlands] = useState<Farmland[]>(() => loadInitialState(STORE_KEYS.FARMLANDS, [SEED_FARMLAND]));
-  const [plots, setPlots] = useState<PlotBed[]>(() => loadInitialState(STORE_KEYS.PLOTS, SEED_SECTIONS));
+  const [plots, setPlots] = useState<PlotBed[]>(() =>
+    migratePlotFarmIds(loadInitialState(STORE_KEYS.PLOTS, SEED_SECTIONS))
+  );
   const [users, setUsers] = useState<UserProfile[]>(() => loadInitialState(STORE_KEYS.USERS, SEED_USERS));
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => loadInitialState(STORE_KEYS.AUDIT_LOGS, SEED_AUDIT_LOGS));
   const [telemetryObservations, setTelemetryObservations] = useState<TelemetryObservation[]>(() => loadInitialState(STORE_KEYS.TELEMETRY_OBSERVATIONS, SEED_TELEMETRY_OBSERVATIONS));
@@ -334,6 +373,68 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     return loadInitialState(STORE_KEYS.CURRENT_USER, SEED_USERS[0]);
   });
+
+  const [isDemoTelemetryActive, setIsDemoTelemetryActive] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(STORE_KEYS.DEMO_TELEMETRY_ACTIVE) === 'true';
+  });
+
+  // 1. Real-time Firestore Subscription for Telemetry Observations
+  useEffect(() => {
+    const unsubscribe = subscribeToFirestoreTelemetry((incomingObs) => {
+      setTelemetryObservations(prev => {
+        const obsMap = new Map<string, TelemetryObservation>();
+        prev.forEach(o => obsMap.set(o.id, o));
+        incomingObs.forEach(o => obsMap.set(o.id, o));
+
+        const mergedList = Array.from(obsMap.values()).sort(
+          (a, b) => new Date(b.measurementTimestamp).getTime() - new Date(a.measurementTimestamp).getTime()
+        );
+
+        // Update active plot state from latest telemetry
+        setPlots(prevPlots => prevPlots.map(plot => {
+          const plotObs = mergedList.filter(o => o.plotId === plot.id || o.plotId === plot.code);
+          if (plotObs.length === 0) return plot;
+
+          const latestSm = plotObs.find(o => o.parameterKey === 'soil_moisture');
+          const latestTemp = plotObs.find(o => o.parameterKey === 'air_temperature' || o.parameterKey === 'soil_temperature');
+          const latestPh = plotObs.find(o => o.parameterKey === 'soil_ph');
+
+          return {
+            ...plot,
+            soilMoisture: latestSm ? latestSm.value : plot.soilMoisture,
+            airTemp: latestTemp ? latestTemp.value : plot.airTemp,
+            soilPh: latestPh ? latestPh.value : plot.soilPh
+          };
+        }));
+
+        return mergedList;
+      });
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // 2. Control Telemetry Simulator Lifecycle based on isDemoTelemetryActive state
+  useEffect(() => {
+    if (isDemoTelemetryActive) {
+      telemetrySimulator.start(
+        () => plots,
+        () => crops
+      );
+    } else {
+      telemetrySimulator.stop();
+    }
+  }, [isDemoTelemetryActive, plots, crops]);
+
+  const toggleDemoTelemetry = (enable: boolean) => {
+    setIsDemoTelemetryActive(enable);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORE_KEYS.DEMO_TELEMETRY_ACTIVE, String(enable));
+    }
+  };
 
   // Save changes to localStorage
   useEffect(() => {
@@ -400,9 +501,15 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [farmlands, activeFarmId]);
 
   const activeSections = useMemo(() => {
-    if (!activeFarmland) return plots;
-    const farmPlots = plots.filter(p => (p as any).farmId === activeFarmland.id);
-    return farmPlots.length > 0 ? farmPlots : plots;
+    if (!activeFarmland) return [];
+    const farmPlots = plots.filter(p => p.farmId === activeFarmland.id);
+    const missingFarmId = farmPlots.filter(p => !p.farmId).length;
+    // ── DIAGNOSTIC: Step 7 ──────────────────────────────────────────────────
+    console.log(
+      `[FARM RELATIONSHIP] farmId: ${activeFarmland.id} | farmName: "${activeFarmland.name}" | ` +
+      `plots: ${farmPlots.length} | plotsMissingFarmId: ${missingFarmId}`
+    );
+    return farmPlots;
   }, [plots, activeFarmland]);
 
   const isAdmin = currentUser?.role === 'admin';
@@ -531,6 +638,9 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     setTelemetryObservations(prev => [newObs, ...prev]);
 
+    // Save directly to real Firestore database
+    saveTelemetryObservationToFirestore(newObs);
+
     // Update target plot's Digital Twin state
     setPlots(prev => prev.map(p => {
       if (p.id === obsData.plotId || p.code === obsData.plotId) {
@@ -625,6 +735,8 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         currentUser,
         isAdmin,
         isWorker,
+        isDemoTelemetryActive,
+        toggleDemoTelemetry,
         setCurrentUser,
         selectFarmland,
         addFarmland,

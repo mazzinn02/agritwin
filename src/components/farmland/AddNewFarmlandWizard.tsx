@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Building2, 
-  MapPin, 
-  Layers, 
-  Sprout, 
-  AlertCircle, 
-  CheckCircle2, 
-  ChevronRight, 
-  ChevronLeft, 
-  Save, 
+import {
+  Building2,
+  MapPin,
+  Layers,
+  Sprout,
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  ChevronLeft,
+  Save,
   Sparkles,
   Info,
   X,
@@ -35,6 +35,11 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
   // Step 1: Basics
   const [farmName, setFarmName] = useState<string>('');
   const [location, setLocation] = useState<string>('');
+  const [address, setAddress] = useState<string>('');
+  const [contactPerson, setContactPerson] = useState<string>('');
+  const [contactPhone, setContactPhone] = useState<string>('');
+  const [contactRole, setContactRole] = useState<string>('');
+  const [skipMap, setSkipMap] = useState<boolean>(true);
   const [totalArea, setTotalArea] = useState<number>(20);
   const [areaUnit, setAreaUnit] = useState<AreaUnit>('Acres');
 
@@ -197,9 +202,8 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
             return (
               <div key={s.num} className="flex flex-col items-center">
                 <div
-                  className={`w-full h-1.5 rounded-full transition-all duration-300 ${
-                    isDone ? 'bg-emerald-500' : isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-800'
-                  }`}
+                  className={`w-full h-1.5 rounded-full transition-all duration-300 ${isDone ? 'bg-emerald-500' : isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-800'
+                    }`}
                 />
                 <span className={`text-[10px] font-semibold mt-1.5 ${isActive ? 'text-emerald-400' : isDone ? 'text-slate-300' : 'text-slate-500'}`}>
                   {s.num}. {s.label}
@@ -405,11 +409,10 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
                     key={n}
                     type="button"
                     onClick={() => setSectionCount(n)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      sectionCount === n
-                        ? 'bg-emerald-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${sectionCount === n
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
                   >
                     {n} {n === 1 ? 'Section' : 'Sections'}
                   </button>
@@ -434,13 +437,12 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
             </div>
 
             {/* Live Running Total Progress Bar & Hard Validation State */}
-            <div className={`p-4 rounded-2xl border transition-all ${
-              isExactMatch
-                ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
-                : diff > 0
+            <div className={`p-4 rounded-2xl border transition-all ${isExactMatch
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+              : diff > 0
                 ? 'bg-rose-50 border-rose-300 text-rose-950'
                 : 'bg-sky-50 border-sky-300 text-sky-950'
-            }`}>
+              }`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                 <div className="flex items-center space-x-2">
                   {isExactMatch ? (
@@ -480,9 +482,8 @@ export const AddNewFarmlandWizard: React.FC<AddNewFarmlandWizardProps> = ({ onCl
               {/* Visual Progress Bar */}
               <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-300 rounded-full ${
-                    isExactMatch ? 'bg-emerald-500' : diff > 0 ? 'bg-rose-500' : 'bg-sky-500'
-                  }`}
+                  className={`h-full transition-all duration-300 rounded-full ${isExactMatch ? 'bg-emerald-500' : diff > 0 ? 'bg-rose-500' : 'bg-sky-500'
+                    }`}
                   style={{ width: `${Math.min(100, (allocatedSum / (totalArea || 1)) * 100)}%` }}
                 />
               </div>

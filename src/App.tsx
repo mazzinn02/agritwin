@@ -28,6 +28,7 @@ import FieldAuditLog from './pages/farm-management/FieldAuditLog';
 import AddNewFarmlandPage from './pages/AddNewFarmlandPage';
 import ManualTelemetryPage from './pages/ManualTelemetryPage';
 import ResearchView from './pages/ResearchView';
+import FarmTelemetryExplorer from './pages/FarmTelemetryExplorer';
 
 import { AgriStoreProvider } from './context/AgriStore';
 
@@ -99,6 +100,7 @@ function App() {
               <Route path="control" element={<DeviceControl />} />
               <Route path="camera" element={<CameraFeed />} />
               <Route path="map" element={<MapView />} />
+              <Route path="telemetry-explorer" element={<FarmTelemetryExplorer />} />
 
               {/* Admin-Only Routes */}
               <Route path="add-farmland" element={<AdminRoute><AddNewFarmlandPage /></AdminRoute>} />

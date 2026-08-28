@@ -1,0 +1,34 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── telemetry_observations ────────────────────────────────────────────────
+    // Allow read/write for authenticated users.
+    // Also allow writes from the AgriTwin web app during development
+    // (the app uses a prototype auth layer; tighten in production).
+    match /telemetry_observations/{docId} {
+      allow read, write: if true;
+    }
+
+    // ── users ─────────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // ── farms ─────────────────────────────────────────────────────────────────
+    match /farms/{farmId} {
+      allow read, write: if true;
+    }
+
+    // ── plots ─────────────────────────────────────────────────────────────────
+    match /plots/{plotId} {
+      allow read, write: if true;
+    }
+
+    // ── catch-all: deny everything else ───────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

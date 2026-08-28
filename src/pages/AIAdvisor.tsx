@@ -1,28 +1,20 @@
 import React, { useState, useMemo } from 'react';
 import { 
   BrainCircuit, 
-  AlertTriangle, 
-  CheckCircle, 
-  Info, 
-  Dna, 
-  Ruler, 
-  Grape, 
-  ShieldAlert, 
-  TrendingUp, 
-  Sparkles,
-  Send,
   Bot,
   Droplet,
   Wind,
   Check,
-  Sprout
+  Sparkles,
+  Info,
+  AlertCircle
 } from 'lucide-react';
 import { useAgriStore } from '../context/AgriStore';
 import { DataSourceBadge } from '../components/common/DataSourceBadge';
 import { PrototypeModeBanner } from '../components/common/PrototypeModeBanner';
 
 export const AIAdvisor: React.FC = () => {
-  const { activeSections: plots, crops, activeFarmland, triggerActuator } = useAgriStore();
+  const { activeSections: plots, crops, triggerActuator, telemetryObservations } = useAgriStore();
   const [selectedPlotId, setSelectedPlotId] = useState<string>(plots[0]?.id || '');
   const [question, setQuestion] = useState('');
   const [doctorAnswer, setDoctorAnswer] = useState<string | null>(null);
@@ -38,6 +30,20 @@ export const AIAdvisor: React.FC = () => {
     return crops.find(c => c.id === activePlot.cropId) || null;
   }, [activePlot, crops]);
 
+  // Retrieve latest observation for selected plot
+  const latestObs = useMemo(() => {
+    if (!activePlot) return null;
+    return telemetryObservations.find(o => o.plotId === activePlot.id || o.plotId === activePlot.code) || null;
+  }, [telemetryObservations, activePlot]);
+
+  const analysisSourceLabel = useMemo(() => {
+    if (!latestObs) return 'INSUFFICIENT DATA';
+    if (latestObs.dataSource === 'SIMULATED') return 'SIMULATED DEMO DATA';
+    if (latestObs.dataSource === 'MANUAL_PROTOTYPE') return 'MANUAL PROTOTYPE DATA';
+    if (latestObs.dataSource === 'LIVE_SENSOR') return 'LIVE PHYSICAL SENSOR DATA';
+    return latestObs.dataSource;
+  }, [latestObs]);
+
   const handleAskDoctor = (e: React.FormEvent) => {
     e.preventDefault();
     if (!question.trim() || !activePlot) return;
@@ -45,7 +51,7 @@ export const AIAdvisor: React.FC = () => {
     setAnswering(true);
     setTimeout(() => {
       setDoctorAnswer(
-        `Agronomic Rule Assessment for ${activePlot.code} (${assignedCrop?.name || 'Crop'}): Based on current observation (Soil Moisture ${activePlot.soilMoisture}%, Temp ${activePlot.airTemp}°C, pH ${activePlot.soilPh}), maintain steady canopy ventilation and pulse irrigation.`
+        `Agronomic Rule Assessment for ${activePlot.code} (${assignedCrop?.name || 'Crop'}): Based on latest ${analysisSourceLabel} (Soil Moisture ${activePlot.soilMoisture}%, Temp ${activePlot.airTemp}°C, pH ${activePlot.soilPh}), micro-climate levels are within safe operating bounds. Recommend standard irrigation pulse.`
       );
       setAnswering(false);
     }, 600);
@@ -117,23 +123,43 @@ export const AIAdvisor: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase text-purple-600 tracking-wider">Current Plot State</span>
                 <h3 className="text-lg font-black text-slate-900">{activePlot.code}: {assignedCrop?.name || 'Fallow'}</h3>
               </div>
-              <DataSourceBadge source="MANUAL_PROTOTYPE" />
+              <DataSourceBadge source={latestObs?.dataSource || 'MANUAL_PROTOTYPE'} />
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl">
-                <span className="font-semibold text-slate-500">Soil Moisture:</span>
-                <span className="font-black text-slate-900">{activePlot.soilMoisture}% (Target: {assignedCrop?.idealMoistureMin || 50}%–{assignedCrop?.idealMoistureMax || 75}%)</span>
-              </div>
-              <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl">
-                <span className="font-semibold text-slate-500">Air Temperature:</span>
-                <span className="font-black text-slate-900">{activePlot.airTemp}°C (Target: {assignedCrop?.idealTempMin || 20}°C–{assignedCrop?.idealTempMax || 28}°C)</span>
-              </div>
-              <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl">
-                <span className="font-semibold text-slate-500">Soil pH:</span>
-                <span className="font-black text-slate-900">{activePlot.soilPh} (Target: {assignedCrop?.idealPhMin || 6.0}–{assignedCrop?.idealPhMax || 6.8})</span>
-              </div>
+            {/* MANDATORY SECTION Q REQUIREMENT: ANALYSIS SOURCE BANNER */}
+            <div className={`p-3 rounded-2xl border text-xs font-bold flex items-center space-x-2 ${
+              latestObs?.dataSource === 'SIMULATED'
+                ? 'bg-amber-50 text-amber-900 border-amber-200'
+                : latestObs
+                ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                : 'bg-slate-100 text-slate-600 border-slate-200'
+            }`}>
+              <Info className="w-4 h-4 shrink-0" />
+              <span>Analysis Source: <strong>{analysisSourceLabel}</strong></span>
             </div>
+
+            {latestObs ? (
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl">
+                  <span className="font-semibold text-slate-500">Soil Moisture:</span>
+                  <span className="font-black text-slate-900">{activePlot.soilMoisture}% (Target: {assignedCrop?.idealMoistureMin || 50}%–{assignedCrop?.idealMoistureMax || 75}%)</span>
+                </div>
+                <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl">
+                  <span className="font-semibold text-slate-500">Air Temperature:</span>
+                  <span className="font-black text-slate-900">{activePlot.airTemp}°C (Target: {assignedCrop?.idealTempMin || 20}°C–{assignedCrop?.idealTempMax || 28}°C)</span>
+                </div>
+                <div className="flex justify-between p-2.5 bg-slate-50 rounded-xl">
+                  <span className="font-semibold text-slate-500">Soil pH:</span>
+                  <span className="font-black text-slate-900">{activePlot.soilPh} (Target: {assignedCrop?.idealPhMin || 6.0}–{assignedCrop?.idealPhMax || 6.8})</span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-500 text-xs font-bold space-y-1">
+                <AlertCircle className="w-6 h-6 mx-auto text-amber-500" />
+                <p>INSUFFICIENT DATA</p>
+                <p className="text-[10px] font-medium text-slate-400">No telemetry observations recorded for this plot yet.</p>
+              </div>
+            )}
 
             <div className="pt-2 border-t border-slate-100 flex gap-2">
               <button
@@ -175,7 +201,7 @@ export const AIAdvisor: React.FC = () => {
                   disabled={answering || !question.trim()}
                   className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shadow-md shadow-purple-600/20"
                 >
-                  <Send className="w-3.5 h-3.5" />
+                  <SendIcon className="w-3.5 h-3.5" />
                   <span>{answering ? 'Analyzing Observations...' : 'Submit Query'}</span>
                 </button>
               </form>
@@ -204,5 +230,12 @@ export const AIAdvisor: React.FC = () => {
     </div>
   );
 };
+
+// Helper send icon component
+const SendIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+  </svg>
+);
 
 export default AIAdvisor;
