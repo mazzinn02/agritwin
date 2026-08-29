@@ -298,6 +298,7 @@ interface AgriStoreContextType {
   isWorker: boolean;
   isDemoTelemetryActive: boolean;
   toggleDemoTelemetry: (enable: boolean) => void;
+  triggerTelemetrySimulationNow: () => Promise<void>;
   seedMultiFarmSystem: () => Promise<any>;
   setCurrentUser: (u: UserProfile | null) => void;
   selectFarmland: (farmId: string) => void;
@@ -481,6 +482,10 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORE_KEYS.DEMO_TELEMETRY_ACTIVE, String(enable));
     }
+  };
+
+  const triggerTelemetrySimulationNow = async () => {
+    await telemetrySimulator.triggerCycle();
   };
 
   // Save changes to localStorage
@@ -785,6 +790,7 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isWorker,
         isDemoTelemetryActive,
         toggleDemoTelemetry,
+        triggerTelemetrySimulationNow,
         seedMultiFarmSystem,
         setCurrentUser,
         selectFarmland,

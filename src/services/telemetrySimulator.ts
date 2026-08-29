@@ -83,6 +83,10 @@ class TelemetrySimulatorService {
     }
   }
 
+  public async triggerCycle(onGenerated?: (observations: TelemetryObservation[]) => void) {
+    return this.generateAndPersistCycle(onGenerated);
+  }
+
   private async generateAndPersistCycle(
     onGenerated?: (observations: TelemetryObservation[]) => void
   ) {

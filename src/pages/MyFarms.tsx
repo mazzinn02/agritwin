@@ -71,14 +71,31 @@ const FARM_ACCENTS = [
 ];
 
 export const MyFarms: React.FC = () => {
-  const { farmlands, plots, sensors, telemetryObservations, seedMultiFarmSystem } = useAgriStore();
+  const { 
+    farmlands, 
+    plots, 
+    sensors, 
+    telemetryObservations, 
+    seedMultiFarmSystem,
+    isDemoTelemetryActive,
+    toggleDemoTelemetry,
+    triggerTelemetrySimulationNow
+  } = useAgriStore();
+
   const [expandedFarm, setExpandedFarm] = useState<string | null>('farm_iiit_dharwad');
   const [seeding, setSeeding] = useState(false);
+  const [simulating, setSimulating] = useState(false);
 
   const handleSeed = async () => {
     setSeeding(true);
     await seedMultiFarmSystem();
     setSeeding(false);
+  };
+
+  const handleSimulate = async () => {
+    setSimulating(true);
+    await triggerTelemetrySimulationNow();
+    setTimeout(() => setSimulating(false), 800);
   };
 
   return (
@@ -93,20 +110,36 @@ export const MyFarms: React.FC = () => {
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded border font-mono ${isSupabaseConfigured ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
               {isSupabaseConfigured ? '● Supabase Connected' : '○ Local Mode'}
             </span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${isDemoTelemetryActive ? 'bg-emerald-950 text-emerald-300 border-emerald-700 animate-pulse' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+              {isDemoTelemetryActive ? '● Realtime Simulator (Every 12s)' : '○ Simulator Paused'}
+            </span>
           </div>
           <h1 className="text-2xl font-black tracking-tight">My Farm Digital Twins</h1>
           <p className="text-xs text-slate-300 mt-1">
             {farmlands.length} farms · {plots.length} plots · {sensors.length} sensors · {telemetryObservations.length.toLocaleString()} telemetry records
           </p>
         </div>
-        <button
-          onClick={handleSeed}
-          disabled={seeding}
-          className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all cursor-pointer disabled:opacity-60 shrink-0"
-        >
-          {seeding ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-slate-950" />}
-          {seeding ? 'Seeding...' : 'Seed Demo Data'}
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <button
+            onClick={handleSimulate}
+            disabled={simulating}
+            className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+            title="Generates live sensor readings immediately for all 25 plots and updates Supabase"
+          >
+            <Zap className={`w-4 h-4 fill-slate-950 ${simulating ? 'animate-bounce' : ''}`} />
+            {simulating ? 'Updating Sensors...' : '⚡ SIMULATE LIVE READINGS'}
+          </button>
+
+          <button
+            onClick={handleSeed}
+            disabled={seeding}
+            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs rounded-xl border border-slate-700 shadow-lg flex items-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+          >
+            {seeding ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4 text-emerald-400" />}
+            {seeding ? 'Seeding...' : 'Reset Seed Data'}
+          </button>
+        </div>
       </div>
 
       {/* ── Farm Cards ─────────────────────────────────────────────────────────── */}

@@ -19,10 +19,20 @@ const GlobalHeaderBar: React.FC = () => {
   const { 
     farmlands, 
     activeFarmland, 
-    selectFarmland
+    selectFarmland,
+    isDemoTelemetryActive,
+    toggleDemoTelemetry,
+    triggerTelemetrySimulationNow
   } = useAgriStore();
 
   const { userProfile, role, isAdmin } = useAuth();
+  const [isSimulating, setIsSimulating] = React.useState(false);
+
+  const handleManualSimulate = async () => {
+    setIsSimulating(true);
+    await triggerTelemetrySimulationNow();
+    setTimeout(() => setIsSimulating(false), 800);
+  };
 
   return (
     <div className="mb-6 flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-slate-200/80 gap-3">
@@ -49,15 +59,48 @@ const GlobalHeaderBar: React.FC = () => {
         <DataSourceBadge source="MANUAL_PROTOTYPE" />
       </div>
 
-      {/* Right: Quick Actions & Real User Auth Profile Badge */}
+      {/* Right: Simulator Controls, Quick Actions & User Profile */}
       <div className="flex flex-wrap items-center gap-2.5">
+        {/* Live Real-Time Telemetry Simulator Controls */}
+        <div className="flex items-center space-x-1.5 bg-slate-900 text-white p-1 pl-3 rounded-xl border border-slate-800 shadow-xs text-xs font-bold">
+          <div className="flex items-center space-x-2">
+            <span className={`w-2 h-2 rounded-full ${isDemoTelemetryActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+            <span className="text-[11px] font-black text-slate-200">
+              {isDemoTelemetryActive ? 'Realtime 12s Feed' : 'Simulator Paused'}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => toggleDemoTelemetry(!isDemoTelemetryActive)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+              isDemoTelemetryActive
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+            }`}
+          >
+            {isDemoTelemetryActive ? 'PAUSE' : 'START STREAM'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleManualSimulate}
+            disabled={isSimulating}
+            className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg text-[11px] transition-all flex items-center space-x-1 cursor-pointer disabled:opacity-50 shadow-xs"
+            title="Generate new sensor reading batch now across all farms and plots"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${isSimulating ? 'animate-spin' : ''}`} />
+            <span>{isSimulating ? 'Updating...' : '⚡ SIMULATE NOW'}</span>
+          </button>
+        </div>
+
         {isAdmin && (
           <Link
             to="/manual-telemetry"
             className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all"
           >
             <UserCheck className="w-3.5 h-3.5" />
-            <span>+ Add Observation</span>
+            <span>+ Add Obs</span>
           </Link>
         )}
 
