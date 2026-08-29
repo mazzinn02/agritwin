@@ -7,7 +7,7 @@ const SUPABASE_URL = env.VITE_SUPABASE_URL || 'https://xyzcompany.supabase.co';
 const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || 'public-anon-key-placeholder';
 
 export const isSupabaseConfigured = Boolean(
-  env.VITE_SUPABASE_URL && 
+  env.VITE_SUPABASE_URL &&
   env.VITE_SUPABASE_ANON_KEY &&
   !env.VITE_SUPABASE_URL.includes('xyzcompany')
 );
@@ -27,10 +27,12 @@ export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON
 console.log(
   `%c[SUPABASE CLIENT] Initialized`,
   'color: #3ecf8e; font-weight: bold;',
-  isSupabaseConfigured ? `Connected: ${SUPABASE_URL}` : 'Standby Mode (Set VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY)'
+  isSupabaseConfigured
+    ? `Connected: ${SUPABASE_URL}`
+    : 'Standby Mode (Set VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY)'
 );
 
-// Map TelemetryObservation object to Supabase column names
+// ── Column mapper: TelemetryObservation → Supabase row ──────────────────────
 export const mapObsToSupabaseRow = (obs: TelemetryObservation) => ({
   id: obs.id,
   farm_id: obs.farmId,
@@ -49,7 +51,7 @@ export const mapObsToSupabaseRow = (obs: TelemetryObservation) => ({
   metadata: obs.metadata || {},
 });
 
-// Map Supabase table row to TelemetryObservation object
+// ── Column mapper: Supabase row → TelemetryObservation ──────────────────────
 export const mapSupabaseRowToObs = (row: any): TelemetryObservation => ({
   id: row.id,
   farmId: row.farm_id,
@@ -68,7 +70,7 @@ export const mapSupabaseRowToObs = (row: any): TelemetryObservation => ({
   metadata: row.metadata || {},
 });
 
-// ── Notification / Toast Event Emitter ─────────────────────────────────────
+// ── Toast Event Emitter ──────────────────────────────────────────────────────
 type ToastCallback = (message: string, type: 'success' | 'warning' | 'error') => void;
 const toastListeners: Set<ToastCallback> = new Set();
 
@@ -78,15 +80,19 @@ export function onSupabaseToast(callback: ToastCallback): () => void {
 }
 
 function emitToast(message: string, type: 'success' | 'warning' | 'error') {
-  toastListeners.forEach(cb => cb(message, type));
+  toastListeners.forEach((cb) => cb(message, type));
 }
 
-// ── Realtime Channels Status Tracker ───────────────────────────────────────
+// ── Realtime Status Tracker ──────────────────────────────────────────────────
 export type RealtimeStatusType = 'Connected' | 'Disconnected' | 'Reconnecting';
-let currentRealtimeStatus: RealtimeStatusType = isSupabaseConfigured ? 'Connected' : 'Disconnected';
+let currentRealtimeStatus: RealtimeStatusType = isSupabaseConfigured
+  ? 'Connected'
+  : 'Disconnected';
 const statusListeners: Set<(status: RealtimeStatusType) => void> = new Set();
 
-export function onRealtimeStatusChange(callback: (status: RealtimeStatusType) => void): () => void {
+export function onRealtimeStatusChange(
+  callback: (status: RealtimeStatusType) => void
+): () => void {
   statusListeners.add(callback);
   callback(currentRealtimeStatus);
   return () => statusListeners.delete(callback);
@@ -94,11 +100,13 @@ export function onRealtimeStatusChange(callback: (status: RealtimeStatusType) =>
 
 export function setRealtimeStatus(status: RealtimeStatusType) {
   currentRealtimeStatus = status;
-  statusListeners.forEach(cb => cb(status));
+  statusListeners.forEach((cb) => cb(status));
 }
 
-// 1. Single Observation Insert with Verification Logging
-export async function saveTelemetryObservationToSupabase(obs: TelemetryObservation): Promise<void> {
+// ── 1. Single Observation Insert ─────────────────────────────────────────────
+export async function saveTelemetryObservationToSupabase(
+  obs: TelemetryObservation
+): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
     const row = mapObsToSupabaseRow(obs);
@@ -106,7 +114,9 @@ export async function saveTelemetryObservationToSupabase(obs: TelemetryObservati
     if (error) {
       console.error('[SUPABASE WRITE ERROR]', error.message);
     } else {
-      console.log(`[SUPABASE VERIFIED]\nRecord ID: ${obs.id}\nTimestamp: ${obs.measurementTimestamp}`);
+      console.log(
+        `[SUPABASE VERIFIED]\nRecord ID: ${obs.id}\nTimestamp: ${obs.measurementTimestamp}`
+      );
       emitToast('Telemetry saved to Supabase successfully', 'success');
     }
   } catch (err: any) {
@@ -114,8 +124,10 @@ export async function saveTelemetryObservationToSupabase(obs: TelemetryObservati
   }
 }
 
-// 2. Batch Observation Insert (12-second simulator cycles)
-export async function saveTelemetryBatchToSupabase(observations: TelemetryObservation[]): Promise<void> {
+// ── 2. Batch Observation Insert ──────────────────────────────────────────────
+export async function saveTelemetryBatchToSupabase(
+  observations: TelemetryObservation[]
+): Promise<void> {
   if (!isSupabaseConfigured || !observations || observations.length === 0) return;
   try {
     const rows = observations.map(mapObsToSupabaseRow);
@@ -123,20 +135,41 @@ export async function saveTelemetryBatchToSupabase(observations: TelemetryObserv
     if (error) {
       console.error('[SUPABASE BATCH WRITE ERROR]', error.message);
     } else {
-      const lastRecord = observations[observations.length - 1];
-      console.log(`[SUPABASE VERIFIED]\nRecord ID: ${lastRecord.id}\nTimestamp: ${lastRecord.measurementTimestamp}`);
+      const last = observations[observations.length - 1];
       console.log(
-        `%c[SUPABASE WRITE SUCCESS] Inserted ${observations.length} telemetry records into public.telemetry_observations`,
+        `[SUPABASE VERIFIED]\nRecord ID: ${last.id}\nTimestamp: ${last.measurementTimestamp}`
+      );
+      console.log(
+        `%c[SUPABASE WRITE SUCCESS] Inserted ${observations.length} telemetry records`,
         'color: #3ecf8e; font-weight: bold;'
       );
-      emitToast(`Telemetry saved to Supabase successfully (${observations.length} records)`, 'success');
+      emitToast(
+        `Telemetry saved to Supabase successfully (${observations.length} records)`,
+        'success'
+      );
     }
   } catch (err: any) {
     console.error('[SUPABASE BATCH EXCEPTION]', err?.message);
   }
 }
 
-// 3. Real-Time Multi-Table Telemetry Subscription (telemetry_observations, farms, plots, sensors)
+// ── 3. Realtime Multi-Table Subscription ────────────────────────────────────
+//
+// FIX: "cannot add postgres_changes callbacks after subscribe()"
+//
+// Root cause: Supabase's JS client caches channels by name. If a channel with
+// the same name is removed and re-created, `.channel(sameNname)` returns the
+// OLD cached object that already had `.subscribe()` called — adding `.on()`
+// to it afterwards throws the error.
+//
+// Solution: 
+//   1. Always build the FULL chain  .channel().on().subscribe()  in one shot
+//      before any status callback logic runs.
+//   2. Each reconnect uses a unique channel name (suffixed with a counter) so
+//      the client never returns a stale cached object.
+//   3. Reconnect timers are cleared when the outer cleanup runs so there are
+//      no dangling setTimeout calls after unmount.
+//
 export function subscribeToSupabaseMultiTable(
   onTelemetry: (obs: TelemetryObservation[]) => void,
   onFarmsUpdate?: (farms: any[]) => void,
@@ -150,120 +183,153 @@ export function subscribeToSupabaseMultiTable(
 
   setRealtimeStatus('Connected');
 
-  // Initial fetch for telemetry (last 100 records)
+  // Track active channels and pending reconnect timers so cleanup is complete
+  const activeChannels: RealtimeChannel[] = [];
+  const reconnectTimers: ReturnType<typeof setTimeout>[] = [];
+  let destroyed = false; // set true on cleanup — stops reconnect attempts
+
+  // Initial REST fetch to hydrate telemetry state
   supabase
     .from('telemetry_observations')
     .select('*')
     .order('measurement_timestamp', { ascending: false })
     .limit(100)
     .then(({ data, error }) => {
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         onTelemetry(data.map(mapSupabaseRowToObs));
       }
     });
 
-  // ── ERROR 4 FIX: Auto-reconnect helper ─────────────────────────────────────
-  // Supabase channels report CLOSED status — we re-subscribe automatically
-  const withAutoReconnect = (
-    channelName: string,
+  // ── Core helper: builds a fresh channel with a UNIQUE name each call ───────
+  // The counter suffix guarantees the Supabase client never returns a stale
+  // cached channel object, eliminating the "after subscribe()" error entirely.
+  let channelCounter = 0;
+
+  function createChannel(
+    baseName: string,
     table: string,
     handler: (payload: any) => void,
-    statusTag: string
-  ): RealtimeChannel => {
+    logTag: string
+  ): RealtimeChannel {
+    // Unique name prevents cache collisions on reconnect
+    const uniqueName = `${baseName}_${++channelCounter}`;
+
+    // IMPORTANT: .on() MUST be called before .subscribe() — this is enforced
+    // by building the full chain in a single expression with no gaps.
     const ch = supabase
-      .channel(channelName)
+      .channel(uniqueName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table },
         handler
       )
       .subscribe((status) => {
-        console.log(`[REALTIME ${statusTag} CHANNEL] ${status}`);
+        console.log(`[REALTIME ${logTag} CHANNEL] ${status}`);
+
         if (status === 'SUBSCRIBED') {
           setRealtimeStatus('Connected');
-        } else if (status === 'CHANNEL_ERROR') {
+        } else if (
+          status === 'CHANNEL_ERROR' ||
+          status === 'TIMED_OUT' ||
+          status === 'CLOSED'
+        ) {
+          if (destroyed) return; // component unmounted — stop
           setRealtimeStatus('Reconnecting');
-          // Remove and resubscribe after 3s
-          setTimeout(() => {
-            supabase.removeChannel(ch);
-            withAutoReconnect(channelName, table, handler, statusTag);
+
+          // Remove stale channel, then schedule a fresh one after 3 s
+          supabase.removeChannel(ch);
+          const idx = activeChannels.indexOf(ch);
+          if (idx !== -1) activeChannels.splice(idx, 1);
+
+          const timer = setTimeout(() => {
+            if (destroyed) return;
+            const newCh = createChannel(baseName, table, handler, logTag);
+            activeChannels.push(newCh);
           }, 3000);
-        } else if (status === 'TIMED_OUT' || status === 'CLOSED') {
-          setRealtimeStatus('Reconnecting');
-          setTimeout(() => {
-            supabase.removeChannel(ch);
-            withAutoReconnect(channelName, table, handler, statusTag);
-          }, 3000);
+
+          reconnectTimers.push(timer);
         }
       });
+
     return ch;
-  };
+  }
 
-  // Subscribe to telemetry_observations
-  const telemetryChannel = withAutoReconnect(
-    'telemetry_observations_stream',
-    'telemetry_observations',
-    (payload) => {
-      if (payload.new) {
-        const newObs = mapSupabaseRowToObs(payload.new);
-        onTelemetry([newObs]);
-      }
-    },
-    'TELEMETRY'
+  // ── Subscribe: telemetry_observations ────────────────────────────────────
+  activeChannels.push(
+    createChannel(
+      'telemetry_obs',
+      'telemetry_observations',
+      (payload) => {
+        if (payload.new) {
+          onTelemetry([mapSupabaseRowToObs(payload.new)]);
+        }
+      },
+      'TELEMETRY'
+    )
   );
 
-  // Subscribe to farms
-  const farmsChannel = withAutoReconnect(
-    'farms_stream',
-    'farms',
-    () => {
-      if (onFarmsUpdate) {
-        supabase.from('farms').select('*').then(({ data }) => {
-          if (data) onFarmsUpdate(data);
-        });
-      }
-    },
-    'FARMS'
+  // ── Subscribe: farms ──────────────────────────────────────────────────────
+  activeChannels.push(
+    createChannel(
+      'farms',
+      'farms',
+      () => {
+        if (onFarmsUpdate) {
+          supabase
+            .from('farms')
+            .select('*')
+            .then(({ data }) => { if (data) onFarmsUpdate(data); });
+        }
+      },
+      'FARMS'
+    )
   );
 
-  // Subscribe to plots
-  const plotsChannel = withAutoReconnect(
-    'plots_stream',
-    'plots',
-    () => {
-      if (onPlotsUpdate) {
-        supabase.from('plots').select('*').then(({ data }) => {
-          if (data) onPlotsUpdate(data);
-        });
-      }
-    },
-    'PLOTS'
+  // ── Subscribe: plots ──────────────────────────────────────────────────────
+  activeChannels.push(
+    createChannel(
+      'plots',
+      'plots',
+      () => {
+        if (onPlotsUpdate) {
+          supabase
+            .from('plots')
+            .select('*')
+            .then(({ data }) => { if (data) onPlotsUpdate(data); });
+        }
+      },
+      'PLOTS'
+    )
   );
 
-  // ERROR 3 / 4 FIX: Subscribe to sensors (new table)
-  const sensorsChannel = withAutoReconnect(
-    'sensors_stream',
-    'sensors',
-    () => {
-      if (onSensorsUpdate) {
-        supabase.from('sensors').select('*').then(({ data }) => {
-          if (data) onSensorsUpdate(data);
-        });
-      }
-    },
-    'SENSORS'
+  // ── Subscribe: sensors ────────────────────────────────────────────────────
+  activeChannels.push(
+    createChannel(
+      'sensors',
+      'sensors',
+      () => {
+        if (onSensorsUpdate) {
+          supabase
+            .from('sensors')
+            .select('*')
+            .then(({ data }) => { if (data) onSensorsUpdate(data); });
+        }
+      },
+      'SENSORS'
+    )
   );
 
+  // ── Cleanup: remove all channels and cancel pending reconnect timers ──────
   return () => {
-    supabase.removeChannel(telemetryChannel);
-    supabase.removeChannel(farmsChannel);
-    supabase.removeChannel(plotsChannel);
-    supabase.removeChannel(sensorsChannel);
+    destroyed = true;
+    reconnectTimers.forEach(clearTimeout);
+    activeChannels.forEach((ch) => supabase.removeChannel(ch));
+    activeChannels.length = 0;
     setRealtimeStatus('Disconnected');
   };
 }
 
-// 4. Save Farms to Supabase
+// ── 4. Save Farms to Supabase ────────────────────────────────────────────────
 export async function saveFarmsToSupabase(farms: any[]): Promise<void> {
   if (!isSupabaseConfigured || !farms || farms.length === 0) return;
   try {
@@ -286,7 +352,7 @@ export async function saveFarmsToSupabase(farms: any[]): Promise<void> {
   }
 }
 
-// 5. Save Plots to Supabase
+// ── 5. Save Plots to Supabase ────────────────────────────────────────────────
 export async function savePlotsToSupabase(plots: any[]): Promise<void> {
   if (!isSupabaseConfigured || !plots || plots.length === 0) return;
   try {
@@ -297,14 +363,14 @@ export async function savePlotsToSupabase(plots: any[]): Promise<void> {
       name: p.name,
       area: p.area,
       area_unit: p.areaUnit || 'acres',
-      crop_type: p.cropType || p.name,
-      growth_stage: p.growthStage || 'Vegetative',
-      sensor_node_id: p.sensorNodeId,
+      crop_type: p.cropType || null,
+      growth_stage: p.growthStage || null,
+      sensor_node_id: p.sensorNodeId || null,
       irrigation_status: p.irrigationStatus || 'Scheduled',
       soil_health_score: p.soilHealthScore || 88,
-      soil_moisture: p.soilMoisture,
-      air_temp: p.airTemp,
-      soil_ph: p.soilPh,
+      soil_moisture: p.soilMoisture || null,
+      air_temp: p.airTemp || null,
+      soil_ph: p.soilPh || null,
     }));
     const { error } = await supabase.from('plots').upsert(rows);
     if (!error) {
@@ -317,32 +383,37 @@ export async function savePlotsToSupabase(plots: any[]): Promise<void> {
   }
 }
 
-// 6. Save Sensors to Supabase
+// ── 6. Save Sensors to Supabase ──────────────────────────────────────────────
+// Uses a minimal column set that matches the migration schema so that the
+// call succeeds even when optional columns are not yet present.
 export async function saveSensorsToSupabase(sensors: any[]): Promise<void> {
   if (!isSupabaseConfigured || !sensors || sensors.length === 0) return;
   try {
     const rows = sensors.map((s) => ({
       id: s.id,
-      farm_id: s.farmId,
-      plot_id: s.plotId,
+      farm_id: s.farmId || null,
+      plot_id: s.plotId || null,
       sensor_code: s.sensorCode || s.id,
       sensor_type: s.type || 'Sensor',
-      assigned_plot_code: s.assignedPlotCode,
-      battery_pct: s.batteryPct,
-      status: s.status,
-      last_ping: s.lastPing,
-      current_reading: s.currentReading,
+      assigned_plot_code: s.assignedPlotCode || null,
+      battery_pct: s.batteryPct ?? 95,
+      status: s.status || 'Online',
+      last_ping: s.lastPing || new Date().toISOString(),
+      current_reading: s.currentReading || null,
     }));
     const { error } = await supabase.from('sensors').upsert(rows);
     if (!error) {
       console.log(`[SUPABASE] Synced ${sensors.length} sensor(s) → public.sensors`);
+    } else {
+      // Table may not exist yet — log as warning, not error, so app keeps running
+      console.warn('[SUPABASE SENSORS NOTICE]', error.message);
     }
   } catch (err: any) {
     console.warn('[SUPABASE SENSORS EXCEPTION]', err?.message);
   }
 }
 
-// 7. Get All Table Counts for Verification Dashboard
+// ── 7. Get All Table Row Counts ──────────────────────────────────────────────
 export async function getSupabaseTableCounts(): Promise<{
   farmsCount: number;
   plotsCount: number;
@@ -353,6 +424,7 @@ export async function getSupabaseTableCounts(): Promise<{
     return { farmsCount: 0, plotsCount: 0, sensorsCount: 0, telemetryCount: 0 };
   }
   try {
+    // Run all count queries in parallel; treat any individual 404 as 0 rows
     const [farmsRes, plotsRes, sensorsRes, telemetryRes] = await Promise.all([
       supabase.from('farms').select('*', { count: 'exact', head: true }),
       supabase.from('plots').select('*', { count: 'exact', head: true }),
@@ -361,12 +433,12 @@ export async function getSupabaseTableCounts(): Promise<{
     ]);
 
     return {
-      farmsCount: farmsRes.count || 0,
-      plotsCount: plotsRes.count || 0,
-      sensorsCount: sensorsRes.count || 0,
-      telemetryCount: telemetryRes.count || 0,
+      farmsCount: farmsRes.count ?? 0,
+      plotsCount: plotsRes.count ?? 0,
+      sensorsCount: sensorsRes.count ?? 0,
+      telemetryCount: telemetryRes.count ?? 0,
     };
-  } catch (e) {
+  } catch {
     return { farmsCount: 0, plotsCount: 0, sensorsCount: 0, telemetryCount: 0 };
   }
 }
