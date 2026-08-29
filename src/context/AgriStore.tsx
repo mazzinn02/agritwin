@@ -499,62 +499,96 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     await telemetrySimulator.triggerCycle();
   };
 
-  // Save changes to localStorage
+  // Save changes to localStorage with safe try-catch wrapper to prevent QuotaExceededError
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORE_KEYS.CROPS, JSON.stringify(crops));
-      localStorage.setItem('agri_crops', JSON.stringify(crops));
+      try {
+        localStorage.setItem(STORE_KEYS.CROPS, JSON.stringify(crops));
+        localStorage.setItem('agri_crops', JSON.stringify(crops));
+      } catch (e) {
+        console.warn('[AgriStore] LocalStorage write error (crops):', e);
+      }
     }
   }, [crops]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORE_KEYS.FARMLANDS, JSON.stringify(farmlands));
+      try {
+        localStorage.setItem(STORE_KEYS.FARMLANDS, JSON.stringify(farmlands));
+      } catch (e) {
+        console.warn('[AgriStore] LocalStorage write error (farmlands):', e);
+      }
     }
   }, [farmlands]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORE_KEYS.PLOTS, JSON.stringify(plots));
-      localStorage.setItem('agri_plots', JSON.stringify(plots));
-      window.dispatchEvent(new Event('agri_storage_updated'));
+      try {
+        localStorage.setItem(STORE_KEYS.PLOTS, JSON.stringify(plots));
+        localStorage.setItem('agri_plots', JSON.stringify(plots));
+        window.dispatchEvent(new Event('agri_storage_updated'));
+      } catch (e) {
+        console.warn('[AgriStore] LocalStorage write error (plots):', e);
+      }
     }
   }, [plots]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORE_KEYS.USERS, JSON.stringify(users));
+      try {
+        localStorage.setItem(STORE_KEYS.USERS, JSON.stringify(users));
+      } catch (e) {
+        console.warn('[AgriStore] LocalStorage write error (users):', e);
+      }
     }
   }, [users]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORE_KEYS.AUDIT_LOGS, JSON.stringify(auditLogs));
-      localStorage.setItem('agri_field_audit_log', JSON.stringify(auditLogs));
+      try {
+        localStorage.setItem(STORE_KEYS.AUDIT_LOGS, JSON.stringify(auditLogs));
+        localStorage.setItem('agri_field_audit_log', JSON.stringify(auditLogs));
+      } catch (e) {
+        console.warn('[AgriStore] LocalStorage write error (auditLogs):', e);
+      }
     }
   }, [auditLogs]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORE_KEYS.TELEMETRY_OBSERVATIONS, JSON.stringify(telemetryObservations));
-      window.dispatchEvent(new Event('agri_storage_updated'));
+      try {
+        // Cap local storage telemetry observations to latest 50 to prevent browser 5MB quota overflow
+        const cappedObs = (telemetryObservations || []).slice(0, 50);
+        localStorage.setItem(STORE_KEYS.TELEMETRY_OBSERVATIONS, JSON.stringify(cappedObs));
+        window.dispatchEvent(new Event('agri_storage_updated'));
+      } catch (e) {
+        console.warn('[AgriStore] LocalStorage quota exceeded for telemetry observations, safely skipping local write.', e);
+      }
     }
   }, [telemetryObservations]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORE_KEYS.ACTIVE_FARM_ID, activeFarmId);
+      try {
+        localStorage.setItem(STORE_KEYS.ACTIVE_FARM_ID, activeFarmId);
+      } catch (e) {
+        console.warn('[AgriStore] LocalStorage write error (activeFarmId):', e);
+      }
     }
   }, [activeFarmId]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      if (currentUser) {
-        localStorage.setItem(STORE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
-        localStorage.setItem('agritwin_active_session', JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem(STORE_KEYS.CURRENT_USER);
-        localStorage.removeItem('agritwin_active_session');
+      try {
+        if (currentUser) {
+          localStorage.setItem(STORE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
+          localStorage.setItem('agritwin_active_session', JSON.stringify(currentUser));
+        } else {
+          localStorage.removeItem(STORE_KEYS.CURRENT_USER);
+          localStorage.removeItem('agritwin_active_session');
+        }
+      } catch (e) {
+        console.warn('[AgriStore] LocalStorage write error (currentUser):', e);
       }
     }
   }, [currentUser]);
