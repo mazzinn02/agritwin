@@ -13,7 +13,9 @@ import {
   FileCheck2,
   Table,
   BarChart3,
-  Send
+  Send,
+  Cpu,
+  Building2
 } from 'lucide-react';
 import { 
   checkSupabaseConnection, 
@@ -26,24 +28,36 @@ import {
   isSupabaseConfigured, 
   onRealtimeStatusChange, 
   onSupabaseToast, 
+  getSupabaseTableCounts,
   RealtimeStatusType 
 } from '../../lib/supabase';
-import { TelemetryObservation } from '../../types';
+import { useAgriStore } from '../../context/AgriStore';
 
-interface SupabaseMonitorSectionProps {
-  telemetryObservations: TelemetryObservation[];
-}
+// SupabaseMonitorSection is self-contained: reads from AgriStore directly
+// No props required — eliminates undefined.length crash
+export const SupabaseMonitorSection: React.FC = () => {
+  // ERROR 1 FIX: Pull from context internally, default to empty arrays if undefined
+  const { telemetryObservations, farmlands, plots, sensors } = useAgriStore();
+  const safeObs = telemetryObservations ?? [];
+  const safeFarms = farmlands ?? [];
+  const safePlots = plots ?? [];
+  const safeSensors = sensors ?? [];
 
-export const SupabaseMonitorSection: React.FC<SupabaseMonitorSectionProps> = ({ telemetryObservations }) => {
   const [connStatus, setConnStatus] = useState<SupabaseConnectionStatus>({
     connected: false,
     url: 'Loading...',
     message: 'Initializing connection check...',
   });
   const [metrics, setMetrics] = useState<SupabaseTelemetryMetrics>({
-    totalCount: telemetryObservations.length,
+    totalCount: safeObs.length,
     countToday: 0,
     latestTimestamp: null,
+  });
+  const [tableCounts, setTableCounts] = useState({
+    farmsCount: safeFarms.length,
+    plotsCount: safePlots.length,
+    sensorsCount: safeSensors.length,
+    telemetryCount: safeObs.length,
   });
   const [realtimeState, setRealtimeState] = useState<RealtimeStatusType>('Connected');
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -73,6 +87,15 @@ export const SupabaseMonitorSection: React.FC<SupabaseMonitorSectionProps> = ({ 
 
       const m = await getTelemetryCount();
       setMetrics(m);
+
+      // Also fetch table-level row counts from Supabase
+      const counts = await getSupabaseTableCounts();
+      setTableCounts({
+        farmsCount: counts.farmsCount || safeFarms.length,
+        plotsCount: counts.plotsCount || safePlots.length,
+        sensorsCount: counts.sensorsCount || safeSensors.length,
+        telemetryCount: counts.telemetryCount || safeObs.length,
+      });
     } catch (e) {
       console.warn('[SUPABASE MONITOR REFRESH ERROR]', e);
     } finally {
@@ -86,6 +109,7 @@ export const SupabaseMonitorSection: React.FC<SupabaseMonitorSectionProps> = ({ 
       refreshMetrics();
     }, 5000);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleTestInsert = async () => {
@@ -100,8 +124,8 @@ export const SupabaseMonitorSection: React.FC<SupabaseMonitorSectionProps> = ({ 
     setTimeout(() => setTestResult(null), 5000);
   };
 
-  // Recent 10 telemetry observations
-  const latestTen = telemetryObservations.slice(0, 10);
+  // Safe slice: only run on defined, non-empty array
+  const latestTen = safeObs.slice(0, 10);
 
   const getRealtimeBadge = (status: RealtimeStatusType) => {
     switch (status) {
@@ -131,7 +155,7 @@ export const SupabaseMonitorSection: React.FC<SupabaseMonitorSectionProps> = ({ 
 
   return (
     <div className="space-y-6 font-sans text-slate-800">
-      {/* Requirement D: Live Verification Toast Banner */}
+      {/* Live Verification Toast Banner */}
       {toastNotice && (
         <div className="p-4 bg-emerald-950 text-emerald-300 border border-emerald-700 rounded-2xl shadow-xl flex items-center justify-between text-xs font-bold animate-fadeIn">
           <div className="flex items-center gap-2">
@@ -147,7 +171,7 @@ export const SupabaseMonitorSection: React.FC<SupabaseMonitorSectionProps> = ({ 
         </div>
       )}
 
-      {/* Requirement C & E: Top Row Dashboard Status Widget + Controls */}
+      {/* Supabase Dashboard Status Widget */}
       <div className="bg-slate-950 text-white rounded-3xl p-6 border border-slate-800 shadow-2xl space-y-6">
         
         {/* Header bar */}
@@ -208,77 +232,99 @@ export const SupabaseMonitorSection: React.FC<SupabaseMonitorSectionProps> = ({ 
           </div>
         )}
 
-        {/* Metric Cards Grid (Requirement C & E) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Metric Cards Grid — 6 cards: 4 table counts + 2 telemetry metrics */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           
-          {/* Card 1: Total Records */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          {/* Farms Count */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between col-span-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Telemetry Rows</span>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Farms</span>
+              <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg">
+                <Building2 className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-3xl font-black text-white">{tableCounts.farmsCount}</div>
+              <p className="text-[10px] text-slate-500 mt-1">public.farms</p>
+            </div>
+          </div>
+
+          {/* Plots Count */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between col-span-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Plots</span>
+              <div className="p-1.5 bg-teal-500/20 text-teal-400 rounded-lg">
+                <Layers className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-3xl font-black text-white">{tableCounts.plotsCount}</div>
+              <p className="text-[10px] text-slate-500 mt-1">public.plots</p>
+            </div>
+          </div>
+
+          {/* Sensors Count */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between col-span-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Sensors</span>
+              <div className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg">
+                <Cpu className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-3xl font-black text-white">{tableCounts.sensorsCount}</div>
+              <p className="text-[10px] text-slate-500 mt-1">public.sensors</p>
+            </div>
+          </div>
+
+          {/* Total Telemetry Records */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between col-span-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Rows</span>
               <div className="p-1.5 bg-sky-500/20 text-sky-400 rounded-lg">
                 <BarChart3 className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-3">
-              <div className="text-3xl font-black text-white">{metrics.totalCount.toLocaleString()}</div>
-              <p className="text-[10px] text-slate-500 mt-1">Table: public.telemetry_observations</p>
+              <div className="text-3xl font-black text-white">{tableCounts.telemetryCount.toLocaleString()}</div>
+              <p className="text-[10px] text-slate-500 mt-1">telemetry_obs</p>
             </div>
           </div>
 
-          {/* Card 2: Records Added Today */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          {/* Records Added Today */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between col-span-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Records Added Today</span>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Today</span>
               <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg">
                 <Zap className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-3">
               <div className="text-3xl font-black text-emerald-400">{metrics.countToday.toLocaleString()}</div>
-              <p className="text-[10px] text-slate-500 mt-1">Since 00:00 midnight local time</p>
+              <p className="text-[10px] text-slate-500 mt-1">Since midnight</p>
             </div>
           </div>
 
-          {/* Card 3: Last Inserted Timestamp */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          {/* Realtime Subscriptions */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between col-span-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Last Inserted Timestamp</span>
-              <div className="p-1.5 bg-purple-500/20 text-purple-400 rounded-lg">
-                <Clock className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="mt-3">
-              <div className="text-sm font-black font-mono text-white truncate">
-                {metrics.latestTimestamp 
-                  ? new Date(metrics.latestTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                  : 'Pending cycle...'}
-              </div>
-              <p className="text-[10px] text-slate-500 mt-1 font-mono truncate">
-                {metrics.latestTimestamp ? new Date(metrics.latestTimestamp).toLocaleDateString() : 'No inserts yet'}
-              </p>
-            </div>
-          </div>
-
-          {/* Card 4: Subscribed Tables (Requirement G) */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Realtime Subscriptions</span>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Realtime</span>
               <div className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg">
                 <Wifi className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 space-y-1 font-mono text-[10px]">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">telemetry_observations</span>
-                <span className="text-emerald-400 font-bold">ACTIVE ✓</span>
+                <span className="text-slate-400">telemetry</span>
+                <span className="text-emerald-400 font-bold">✓</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">farms</span>
-                <span className="text-emerald-400 font-bold">ACTIVE ✓</span>
+                <span className="text-emerald-400 font-bold">✓</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">plots</span>
-                <span className="text-emerald-400 font-bold">ACTIVE ✓</span>
+                <span className="text-slate-400">sensors</span>
+                <span className="text-emerald-400 font-bold">✓</span>
               </div>
             </div>
           </div>
@@ -287,7 +333,7 @@ export const SupabaseMonitorSection: React.FC<SupabaseMonitorSectionProps> = ({ 
 
       </div>
 
-      {/* Requirement E: Live Monitoring Panel — Latest 10 Records Table */}
+      {/* Live Monitoring Panel — Latest 10 Records Table */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
@@ -347,7 +393,7 @@ export const SupabaseMonitorSection: React.FC<SupabaseMonitorSectionProps> = ({ 
                       {obs.parameterKey.replace(/_/g, ' ')}
                     </td>
                     <td className="py-2.5 px-3 text-right font-black text-slate-900">
-                      {obs.value.toFixed(1)} <span className="font-normal text-slate-400 text-[10px]">{obs.unit}</span>
+                      {Number(obs.value ?? 0).toFixed(1)} <span className="font-normal text-slate-400 text-[10px]">{obs.unit}</span>
                     </td>
                     <td className="py-2.5 px-3">
                       <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">

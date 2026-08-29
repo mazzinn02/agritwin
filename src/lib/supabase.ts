@@ -136,11 +136,12 @@ export async function saveTelemetryBatchToSupabase(observations: TelemetryObserv
   }
 }
 
-// 3. Real-Time Multi-Table Telemetry Subscription (telemetry_observations, farms, plots)
+// 3. Real-Time Multi-Table Telemetry Subscription (telemetry_observations, farms, plots, sensors)
 export function subscribeToSupabaseMultiTable(
   onTelemetry: (obs: TelemetryObservation[]) => void,
   onFarmsUpdate?: (farms: any[]) => void,
-  onPlotsUpdate?: (plots: any[]) => void
+  onPlotsUpdate?: (plots: any[]) => void,
+  onSensorsUpdate?: (sensors: any[]) => void
 ): () => void {
   if (!isSupabaseConfigured) {
     setRealtimeStatus('Disconnected');
@@ -149,7 +150,7 @@ export function subscribeToSupabaseMultiTable(
 
   setRealtimeStatus('Connected');
 
-  // Initial fetch for telemetry
+  // Initial fetch for telemetry (last 100 records)
   supabase
     .from('telemetry_observations')
     .select('*')
@@ -161,66 +162,103 @@ export function subscribeToSupabaseMultiTable(
       }
     });
 
-  // Subscribe to telemetry_observations
-  const telemetryChannel = supabase
-    .channel('telemetry_observations_stream')
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'telemetry_observations' },
-      (payload) => {
-        if (payload.new) {
-          const newObs = mapSupabaseRowToObs(payload.new);
-          onTelemetry([newObs]);
+  // ── ERROR 4 FIX: Auto-reconnect helper ─────────────────────────────────────
+  // Supabase channels report CLOSED status — we re-subscribe automatically
+  const withAutoReconnect = (
+    channelName: string,
+    table: string,
+    handler: (payload: any) => void,
+    statusTag: string
+  ): RealtimeChannel => {
+    const ch = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table },
+        handler
+      )
+      .subscribe((status) => {
+        console.log(`[REALTIME ${statusTag} CHANNEL] ${status}`);
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('Connected');
+        } else if (status === 'CHANNEL_ERROR') {
+          setRealtimeStatus('Reconnecting');
+          // Remove and resubscribe after 3s
+          setTimeout(() => {
+            supabase.removeChannel(ch);
+            withAutoReconnect(channelName, table, handler, statusTag);
+          }, 3000);
+        } else if (status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeStatus('Reconnecting');
+          setTimeout(() => {
+            supabase.removeChannel(ch);
+            withAutoReconnect(channelName, table, handler, statusTag);
+          }, 3000);
         }
+      });
+    return ch;
+  };
+
+  // Subscribe to telemetry_observations
+  const telemetryChannel = withAutoReconnect(
+    'telemetry_observations_stream',
+    'telemetry_observations',
+    (payload) => {
+      if (payload.new) {
+        const newObs = mapSupabaseRowToObs(payload.new);
+        onTelemetry([newObs]);
       }
-    )
-    .subscribe((status) => {
-      console.log(`[REALTIME TELEMETRY CHANNEL] ${status}`);
-      if (status === 'SUBSCRIBED') setRealtimeStatus('Connected');
-      if (status === 'TIMED_OUT' || status === 'CLOSED') setRealtimeStatus('Disconnected');
-      if (status === 'CHANNEL_ERROR') setRealtimeStatus('Reconnecting');
-    });
+    },
+    'TELEMETRY'
+  );
 
   // Subscribe to farms
-  const farmsChannel = supabase
-    .channel('farms_stream')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'farms' },
-      () => {
-        if (onFarmsUpdate) {
-          supabase.from('farms').select('*').then(({ data }) => {
-            if (data) onFarmsUpdate(data);
-          });
-        }
+  const farmsChannel = withAutoReconnect(
+    'farms_stream',
+    'farms',
+    () => {
+      if (onFarmsUpdate) {
+        supabase.from('farms').select('*').then(({ data }) => {
+          if (data) onFarmsUpdate(data);
+        });
       }
-    )
-    .subscribe((status) => {
-      console.log(`[REALTIME FARMS CHANNEL] ${status}`);
-    });
+    },
+    'FARMS'
+  );
 
   // Subscribe to plots
-  const plotsChannel = supabase
-    .channel('plots_stream')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'plots' },
-      () => {
-        if (onPlotsUpdate) {
-          supabase.from('plots').select('*').then(({ data }) => {
-            if (data) onPlotsUpdate(data);
-          });
-        }
+  const plotsChannel = withAutoReconnect(
+    'plots_stream',
+    'plots',
+    () => {
+      if (onPlotsUpdate) {
+        supabase.from('plots').select('*').then(({ data }) => {
+          if (data) onPlotsUpdate(data);
+        });
       }
-    )
-    .subscribe((status) => {
-      console.log(`[REALTIME PLOTS CHANNEL] ${status}`);
-    });
+    },
+    'PLOTS'
+  );
+
+  // ERROR 3 / 4 FIX: Subscribe to sensors (new table)
+  const sensorsChannel = withAutoReconnect(
+    'sensors_stream',
+    'sensors',
+    () => {
+      if (onSensorsUpdate) {
+        supabase.from('sensors').select('*').then(({ data }) => {
+          if (data) onSensorsUpdate(data);
+        });
+      }
+    },
+    'SENSORS'
+  );
 
   return () => {
     supabase.removeChannel(telemetryChannel);
     supabase.removeChannel(farmsChannel);
     supabase.removeChannel(plotsChannel);
+    supabase.removeChannel(sensorsChannel);
     setRealtimeStatus('Disconnected');
   };
 }
