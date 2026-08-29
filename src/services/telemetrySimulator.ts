@@ -1,21 +1,18 @@
-import { PlotBed, Crop, TelemetryObservation } from '../types';
+import { PlotBed, Crop, IoTSensor, TelemetryObservation } from '../types';
 import { getParameterDefinition } from '../lib/parameters';
-import { saveTelemetryBatchToSupabase } from '../lib/supabase';
+import { saveTelemetryBatchToSupabase, updateSensorReadingInSupabase, supabase, isSupabaseConfigured } from '../lib/supabase';
 
-// ─── SIMULATION INTERVAL ────────────────────────────────────────────────────
-// Data is generated every 12 seconds and written directly to:
-//   Supabase PostgreSQL → table: "public.telemetry_observations"
-// Each document has: farmId, plotId, sensorId, parameterKey, value, dataSource: "SIMULATED"
-export const DEMO_TELEMETRY_INTERVAL_MS = 12000;
+// ─── SIMULATION INTERVAL (10 Seconds) ───────────────────────────────────────
+export const DEMO_TELEMETRY_INTERVAL_MS = 10000;
 
 class TelemetrySimulatorService {
   private timerId: any = null;
   private intervalMs: number = DEMO_TELEMETRY_INTERVAL_MS;
   private isRunning: boolean = false;
   private simulationSessionId: string = `sim_session_${Date.now()}`;
-  private plotParamState: Record<string, number> = {};
   private getPlotsFn: (() => PlotBed[]) | null = null;
   private getCropsFn: (() => Crop[]) | null = null;
+  private getSensorsFn: (() => IoTSensor[]) | null = null;
   private lastCycleTime: number | null = null;
 
   public getSessionId(): string {
@@ -44,10 +41,12 @@ class TelemetrySimulatorService {
   public start(
     getPlots: () => PlotBed[],
     getCrops: () => Crop[],
-    onGenerated?: (observations: TelemetryObservation[]) => void
+    getSensors?: () => IoTSensor[],
+    onGenerated?: (observations: TelemetryObservation[], updatedSensors?: IoTSensor[]) => void
   ) {
     this.getPlotsFn = getPlots;
     this.getCropsFn = getCrops;
+    this.getSensorsFn = getSensors || null;
 
     if (this.isRunning) {
       return;
@@ -64,7 +63,7 @@ class TelemetrySimulatorService {
       }
     }, 1000);
 
-    // Set recurring timer
+    // Set 10-second recurring timer
     this.timerId = setInterval(() => {
       if (this.isRunning) {
         this.generateAndPersistCycle(onGenerated);
@@ -83,200 +82,186 @@ class TelemetrySimulatorService {
     }
   }
 
-  public async triggerCycle(onGenerated?: (observations: TelemetryObservation[]) => void) {
+  public async triggerCycle(onGenerated?: (observations: TelemetryObservation[], updatedSensors?: IoTSensor[]) => void) {
     return this.generateAndPersistCycle(onGenerated);
   }
 
   private async generateAndPersistCycle(
-    onGenerated?: (observations: TelemetryObservation[]) => void
+    onGenerated?: (observations: TelemetryObservation[], updatedSensors?: IoTSensor[]) => void
   ) {
-    const plots = this.getPlotsFn ? this.getPlotsFn() : [];
-    const crops = this.getCropsFn ? this.getCropsFn() : [];
+    let sensorsToProcess: IoTSensor[] = [];
 
-    if (!plots || plots.length === 0) {
-      console.log('TelemetrySimulator: No active plots found for generation cycle.');
+    // 1. Fetch sensors from public.sensors if Supabase is configured
+    if (isSupabaseConfigured) {
+      try {
+        const { data: dbSensors, error } = await supabase.from('sensors').select('*');
+        if (!error && dbSensors && dbSensors.length > 0) {
+          sensorsToProcess = dbSensors.map((row: any) => ({
+            id: row.id,
+            farmId: row.farm_id,
+            plotId: row.plot_id,
+            sensorCode: row.sensor_code,
+            nodeName: `${row.sensor_type || 'Sensor'} [${row.sensor_code || row.id}]`,
+            assignedPlotCode: row.assigned_plot_code || '',
+            type: row.sensor_type,
+            sensorTypes: [row.sensor_type],
+            batteryPct: row.battery_pct ?? 95,
+            status: row.status || 'Online',
+            lastPing: row.last_ping || new Date().toISOString(),
+            currentReading: row.current_reading || ''
+          }));
+        }
+      } catch (e) {
+        console.warn('TelemetrySimulator: Could not fetch public.sensors directly, using fallback.');
+      }
+    }
+
+    // Fallback to store sensors if DB list empty
+    if (sensorsToProcess.length === 0 && this.getSensorsFn) {
+      sensorsToProcess = this.getSensorsFn() || [];
+    }
+
+    if (!sensorsToProcess || sensorsToProcess.length === 0) {
+      console.log('TelemetrySimulator: No active sensors found to simulate.');
       return;
     }
 
+    const plots = this.getPlotsFn ? this.getPlotsFn() : [];
     const generatedObs: TelemetryObservation[] = [];
+    const updatedSensors: IoTSensor[] = [];
     const nowIso = new Date().toISOString();
-    const currentHour = new Date().getHours() + new Date().getMinutes() / 60;
     this.lastCycleTime = Date.now();
 
+    // 2. Process each sensor and generate new realistic value based on sensor type
+    for (const sensor of sensorsToProcess) {
+      const typeLower = (sensor.type || sensor.nodeName || '').toLowerCase();
+      const oldValue = sensor.currentReading || '0';
+      const numMatch = oldValue.match(/[-+]?[0-9]*\.?[0-9]+/);
+      let currVal = numMatch ? parseFloat(numMatch[0]) : 50;
 
-    let eligibleCount = 0;
-    let skippedNoFarm = 0;
-    let skippedNoSensor = 0;
-    let skippedNoCrop = 0;
+      let newValueNum = currVal;
+      let newValueStr = '';
+      let paramKey = 'soil_moisture';
+      let unit = '%';
+      let displayName = 'Sensor Reading';
 
-    for (const plot of plots) {
-      // ── GUARD 1: farm ownership ────────────────────────────────────────────
-      const farmId = plot.farmId || 'farm_iiit_dharwad';
+      // ── TYPE-BASED SENSOR VALUE GENERATION ────────────────────────────────────
+      // soil_moisture: current ± random(-3, +3)
+      // temperature: current ± random(-1, +1)
+      // humidity: current ± random(-2, +2)
+      // soil_ph: current ± random(-0.2, +0.2)
+      // nitrogen: current ± random(-5, +5)
+      // phosphorus: current ± random(-3, +3)
+      // potassium: current ± random(-4, +4)
 
-      // ── GUARD 2: sensor ownership ──────────────────────────────────────────
-      const nodeCode = plot.sensorNodeId || plot.sensorId || `NODE-${plot.code}`;
+      if (typeLower.includes('moisture') || typeLower.includes('sm')) {
+        paramKey = 'soil_moisture';
+        unit = '%';
+        displayName = 'Soil Moisture';
+        const delta = (Math.random() * 6) - 3; // -3 to +3
+        newValueNum = Math.max(10, Math.min(95, currVal + delta));
+        newValueStr = `${newValueNum.toFixed(1)}%`;
+      } else if (typeLower.includes('temp') || typeLower.includes('at')) {
+        paramKey = 'air_temperature';
+        unit = '°C';
+        displayName = 'Air Temperature';
+        const delta = (Math.random() * 2) - 1; // -1 to +1
+        newValueNum = Math.max(10, Math.min(45, currVal + delta));
+        newValueStr = `${newValueNum.toFixed(1)}°C`;
+      } else if (typeLower.includes('hum')) {
+        paramKey = 'humidity';
+        unit = '%';
+        displayName = 'Atmospheric Humidity';
+        const delta = (Math.random() * 4) - 2; // -2 to +2
+        newValueNum = Math.max(20, Math.min(98, currVal + delta));
+        newValueStr = `${newValueNum.toFixed(1)}%`;
+      } else if (typeLower.includes('ph')) {
+        paramKey = 'soil_ph';
+        unit = 'pH';
+        displayName = 'Soil pH';
+        const delta = (Math.random() * 0.4) - 0.2; // -0.2 to +0.2
+        newValueNum = Math.max(5.0, Math.min(8.5, currVal + delta));
+        newValueStr = `${newValueNum.toFixed(2)} pH`;
+      } else if (typeLower.includes('nitrogen') || typeLower.includes('n_') || typeLower.endsWith('_n')) {
+        paramKey = 'nitrogen';
+        unit = 'mg/kg';
+        displayName = 'Nitrogen';
+        const delta = (Math.random() * 10) - 5; // -5 to +5
+        newValueNum = Math.max(10, Math.min(300, currVal + delta));
+        newValueStr = `${Math.round(newValueNum)} mg/kg`;
+      } else if (typeLower.includes('phosphor') || typeLower.includes('p_') || typeLower.endsWith('_p')) {
+        paramKey = 'phosphorus';
+        unit = 'mg/kg';
+        displayName = 'Phosphorus';
+        const delta = (Math.random() * 6) - 3; // -3 to +3
+        newValueNum = Math.max(5, Math.min(150, currVal + delta));
+        newValueStr = `${Math.round(newValueNum)} mg/kg`;
+      } else if (typeLower.includes('potass') || typeLower.includes('k_') || typeLower.endsWith('_k')) {
+        paramKey = 'potassium';
+        unit = 'mg/kg';
+        displayName = 'Potassium';
+        const delta = (Math.random() * 8) - 4; // -4 to +4
+        newValueNum = Math.max(10, Math.min(250, currVal + delta));
+        newValueStr = `${Math.round(newValueNum)} mg/kg`;
+      } else {
+        // Fallback
+        paramKey = 'sensor_reading';
+        unit = '';
+        displayName = sensor.nodeName || 'Sensor';
+        const delta = (Math.random() * 2) - 1;
+        newValueNum = Number((currVal + delta).toFixed(1));
+        newValueStr = `${newValueNum}`;
+      }
 
-      eligibleCount++;
-      const crop = crops.find(c => c.id === plot.cropId) || null;
-      const plotId = plot.id;
+      // 3. Update public.sensors.current_reading
+      if (isSupabaseConfigured) {
+        await updateSensorReadingInSupabase(sensor.id, newValueStr);
+      }
 
-      // 1. Soil Moisture (%)
-      const moistureKey = `${plotId}_soil_moisture`;
-      const prevMoisture = this.plotParamState[moistureKey] ?? plot.soilMoisture ?? 62.0;
-      let nextMoisture = prevMoisture - (0.15 + Math.random() * 0.25);
-      if (plot.isWatering) nextMoisture += 6.5;
-      const minM = crop ? crop.idealMoistureMin - 5 : 40;
-      const maxM = crop ? crop.idealMoistureMax + 5 : 85;
-      nextMoisture = Math.max(minM, Math.min(maxM, Number(nextMoisture.toFixed(1))));
-      this.plotParamState[moistureKey] = nextMoisture;
+      // 5. Log exact required format
+      console.log(`[SENSOR UPDATED] sensorId=${sensor.id} oldValue=${oldValue} newValue=${newValueStr}`);
 
-      const pDefMoisture = getParameterDefinition('soil_moisture');
-      generatedObs.push({
-        id: `sim_${Date.now()}_${plot.code}_sm_${Math.random().toString(36).substring(2, 6)}`,
-        farmId,
-        plotId,
-        deviceId: nodeCode,
-        sensorId: nodeCode,
-        parameterKey: 'soil_moisture',
-        displayName: pDefMoisture.displayName,
-        value: nextMoisture,
-        unit: pDefMoisture.unit,
-        measurementTimestamp: nowIso,
-        receivedTimestamp: nowIso,
-        qualityStatus: 'VALID',
-        dataSource: 'SIMULATED',
-        notes: 'Simulated real-time prototype telemetry reading',
-        metadata: {
-          generated: true,
-          generatorVersion: '1.0',
-          simulationSessionId: this.simulationSessionId,
-          generatedAt: nowIso
-        }
+      // Track updated sensor locally
+      updatedSensors.push({
+        ...sensor,
+        currentReading: newValueStr,
+        lastPing: nowIso
       });
 
-      // 2. Air Temperature (°C)
-      const tempKey = `${plotId}_air_temperature`;
-      const diurnalTemp = 20 + 7 * Math.sin(((currentHour - 8) / 24) * 2 * Math.PI);
-      const randomNoise = (Math.random() - 0.5) * 0.6;
-      let nextTemp = diurnalTemp + randomNoise;
-      if (plot.hvacActive) nextTemp -= 2.0;
-      nextTemp = Math.max(15.0, Math.min(42.0, Number(nextTemp.toFixed(1))));
-      this.plotParamState[tempKey] = nextTemp;
+      // 4. Insert matching telemetry record
+      const plot = plots.find(p => p.id === sensor.plotId || p.code === sensor.assignedPlotCode);
+      const farmId = sensor.farmId || plot?.farmId || 'farm_iiit_dharwad';
+      const plotId = sensor.plotId || plot?.id || 'plot_dharwad_01';
 
-      const pDefTemp = getParameterDefinition('air_temperature');
       generatedObs.push({
-        id: `sim_${Date.now()}_${plot.code}_temp_${Math.random().toString(36).substring(2, 6)}`,
+        id: `obs_${Date.now()}_${sensor.id}_${Math.random().toString(36).substring(2, 6)}`,
         farmId,
         plotId,
-        deviceId: nodeCode,
-        sensorId: nodeCode,
-        parameterKey: 'air_temperature',
-        displayName: pDefTemp.displayName,
-        value: nextTemp,
-        unit: pDefTemp.unit,
+        deviceId: sensor.sensorCode || sensor.id,
+        sensorId: sensor.id,
+        parameterKey: paramKey,
+        displayName,
+        value: Number(newValueNum.toFixed(2)),
+        unit,
         measurementTimestamp: nowIso,
         receivedTimestamp: nowIso,
         qualityStatus: 'VALID',
         dataSource: 'SIMULATED',
-        notes: 'Simulated real-time ambient canopy temperature',
-        metadata: {
-          generated: true,
-          generatorVersion: '1.0',
-          simulationSessionId: this.simulationSessionId,
-          generatedAt: nowIso
-        }
-      });
-
-      // 3. Soil pH
-      const phKey = `${plotId}_soil_ph`;
-      const prevPh = this.plotParamState[phKey] ?? plot.soilPh ?? 6.5;
-      const phDrift = (Math.random() - 0.5) * 0.04;
-      const idealPh = crop ? (crop.idealPhMin + crop.idealPhMax) / 2 : 6.5;
-      let nextPh = prevPh + phDrift + (idealPh - prevPh) * 0.05;
-      nextPh = Math.max(5.5, Math.min(8.0, Number(nextPh.toFixed(2))));
-      this.plotParamState[phKey] = nextPh;
-
-      const pDefPh = getParameterDefinition('soil_ph');
-      generatedObs.push({
-        id: `sim_${Date.now()}_${plot.code}_ph_${Math.random().toString(36).substring(2, 6)}`,
-        farmId,
-        plotId,
-        deviceId: nodeCode,
-        sensorId: nodeCode,
-        parameterKey: 'soil_ph',
-        displayName: pDefPh.displayName,
-        value: nextPh,
-        unit: pDefPh.unit,
-        measurementTimestamp: nowIso,
-        receivedTimestamp: nowIso,
-        qualityStatus: 'VALID',
-        dataSource: 'SIMULATED',
-        notes: 'Simulated real-time soil pH value',
-        metadata: {
-          generated: true,
-          generatorVersion: '1.0',
-          simulationSessionId: this.simulationSessionId,
-          generatedAt: nowIso
-        }
-      });
-
-      // 4. Humidity (%)
-      const pDefHum = getParameterDefinition('humidity');
-      let nextHum = Math.max(40, Math.min(90, 92 - (nextTemp - 15) * 2.2 + (Math.random() - 0.5) * 2));
-      nextHum = Number(nextHum.toFixed(1));
-
-      generatedObs.push({
-        id: `sim_${Date.now()}_${plot.code}_hum_${Math.random().toString(36).substring(2, 6)}`,
-        farmId,
-        plotId,
-        deviceId: nodeCode,
-        sensorId: nodeCode,
-        parameterKey: 'humidity',
-        displayName: pDefHum.displayName,
-        value: nextHum,
-        unit: pDefHum.unit,
-        measurementTimestamp: nowIso,
-        receivedTimestamp: nowIso,
-        qualityStatus: 'VALID',
-        dataSource: 'SIMULATED',
-        notes: 'Simulated real-time atmospheric humidity',
-        metadata: {
-          generated: true,
-          generatorVersion: '1.0',
-          simulationSessionId: this.simulationSessionId,
-          generatedAt: nowIso
-        }
+        notes: `Simulated update for ${sensor.id}`
       });
     }
 
-    console.log(
-      `%c[🌱 TELEMETRY SIMULATOR] Cycle fired at ${new Date().toLocaleTimeString()}`,
-      'color: #10b981; font-weight: bold; font-size: 11px;'
-    );
-    console.log(
-      `  eligible plots: ${eligibleCount} | ` +
-      `skipped(no farmId): ${skippedNoFarm} | ` +
-      `skipped(no sensor): ${skippedNoSensor} | ` +
-      `skipped(fallow): ${skippedNoCrop} | ` +
-      `observations generated: ${generatedObs.length}`
-    );
-    console.log(
-      `  📦 Writing ${generatedObs.length} records → Supabase table: "public.telemetry_observations" [dataSource: SIMULATED]`
-    );
-
-    if (generatedObs.length === 0) return;
-
-    // Persist generated observations directly to Supabase PostgreSQL
-    try {
-      await saveTelemetryBatchToSupabase(generatedObs);
-      console.log(`TelemetrySimulator: Persisted ${generatedObs.length} simulated observations to Supabase.`);
-    } catch (err: any) {
-      console.warn('TelemetrySimulator: Supabase write notice:', err?.message);
+    // Persist batch of telemetry records to public.telemetry_observations
+    if (generatedObs.length > 0) {
+      try {
+        await saveTelemetryBatchToSupabase(generatedObs);
+      } catch (err: any) {
+        console.warn('TelemetrySimulator: Telemetry batch write notice:', err?.message);
+      }
     }
 
-    // Trigger local callback if provided
     if (onGenerated) {
-      onGenerated(generatedObs);
+      onGenerated(generatedObs, updatedSensors);
     }
   }
 }

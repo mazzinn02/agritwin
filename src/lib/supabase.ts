@@ -413,6 +413,29 @@ export async function saveSensorsToSupabase(sensors: any[]): Promise<void> {
   }
 }
 
+// ── 6b. Update Single Sensor Current Reading in Supabase ──────────────────────
+export async function updateSensorReadingInSupabase(
+  sensorId: string,
+  newValue: string
+): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  try {
+    const { error } = await supabase
+      .from('sensors')
+      .update({
+        current_reading: newValue,
+        last_ping: new Date().toISOString()
+      })
+      .eq('id', sensorId);
+
+    if (error) {
+      console.warn(`[SUPABASE SENSOR UPDATE ERROR] ${sensorId}:`, error.message);
+    }
+  } catch (err: any) {
+    console.warn(`[SUPABASE SENSOR UPDATE EXCEPTION] ${sensorId}:`, err?.message);
+  }
+}
+
 // ── 7. Get All Table Row Counts ──────────────────────────────────────────────
 export async function getSupabaseTableCounts(): Promise<{
   farmsCount: number;

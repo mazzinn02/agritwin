@@ -470,12 +470,23 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (isDemoTelemetryActive) {
       telemetrySimulator.start(
         () => plots,
-        () => crops
+        () => crops,
+        () => sensors,
+        (_obs, updatedSensors) => {
+          if (updatedSensors && updatedSensors.length > 0) {
+            setSensors(prev => {
+              const map = new Map<string, IoTSensor>();
+              (prev || []).forEach(s => map.set(s.id, s));
+              updatedSensors.forEach(s => map.set(s.id, s));
+              return Array.from(map.values());
+            });
+          }
+        }
       );
     } else {
       telemetrySimulator.stop();
     }
-  }, [isDemoTelemetryActive, plots, crops]);
+  }, [isDemoTelemetryActive, plots, crops, sensors]);
 
   const toggleDemoTelemetry = (enable: boolean) => {
     setIsDemoTelemetryActive(enable);

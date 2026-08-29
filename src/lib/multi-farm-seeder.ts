@@ -588,14 +588,15 @@ export function generateSeededSensors(): IoTSensor[] {
     const plotId = plot.id;
     const plotCode = plot.code;
 
-    // 6 Sensors per Plot
+    // 7 Sensors per Plot (Farm -> Plot -> Sensors -> [Soil Moisture, Air Temp, Humidity, Soil pH, Nitrogen, Phosphorus, Potassium])
     const sensorTypes = [
-      { key: 'SM', name: 'Soil Moisture Sensor', unit: '%', baseVal: plot.soilMoisture },
-      { key: 'AT', name: 'Air Temperature Sensor', unit: '°C', baseVal: plot.airTemp },
-      { key: 'HUM', name: 'Humidity Sensor', unit: '%', baseVal: 65 },
-      { key: 'PH', name: 'Soil pH Sensor', unit: 'pH', baseVal: plot.soilPh },
-      { key: 'NPK', name: 'NPK Nutrient Sensor', unit: 'mg/kg', baseVal: '120-45-60' },
-      { key: 'PAR', name: 'Light Intensity Sensor', unit: 'Lux', baseVal: 850 }
+      { key: 'SM', name: 'Soil Moisture Sensor', type: 'soil_moisture', unit: '%', baseVal: plot.soilMoisture },
+      { key: 'AT', name: 'Air Temperature Sensor', type: 'temperature', unit: '°C', baseVal: plot.airTemp },
+      { key: 'HUM', name: 'Humidity Sensor', type: 'humidity', unit: '%', baseVal: 65 },
+      { key: 'PH', name: 'Soil pH Sensor', type: 'soil_ph', unit: 'pH', baseVal: plot.soilPh },
+      { key: 'N', name: 'Nitrogen Sensor', type: 'nitrogen', unit: 'mg/kg', baseVal: 120 },
+      { key: 'P', name: 'Phosphorus Sensor', type: 'phosphorus', unit: 'mg/kg', baseVal: 45 },
+      { key: 'K', name: 'Potassium Sensor', type: 'potassium', unit: 'mg/kg', baseVal: 60 }
     ];
 
     sensorTypes.forEach((st, sIdx) => {
@@ -607,8 +608,10 @@ export function generateSeededSensors(): IoTSensor[] {
       else if (st.key === 'AT') readingStr = `${st.baseVal}°C`;
       else if (st.key === 'HUM') readingStr = `${st.baseVal}%`;
       else if (st.key === 'PH') readingStr = `${st.baseVal} pH`;
-      else if (st.key === 'NPK') readingStr = `120-45-60 NPK`;
-      else readingStr = `850 Lux`;
+      else if (st.key === 'N') readingStr = `${st.baseVal} mg/kg`;
+      else if (st.key === 'P') readingStr = `${st.baseVal} mg/kg`;
+      else if (st.key === 'K') readingStr = `${st.baseVal} mg/kg`;
+      else readingStr = `${st.baseVal}`;
 
       sensors.push({
         id: sensorId,
@@ -617,10 +620,10 @@ export function generateSeededSensors(): IoTSensor[] {
         sensorCode,
         nodeName: `${st.name} [${sensorCode}]`,
         assignedPlotCode: plotCode,
-        type: st.name,
+        type: st.type,
         sensorTypes: [st.name],
         batteryPct: 82 + ((pIdx * 3 + sIdx * 5) % 18), // 82% to 99%
-        status: sIdx === 5 && pIdx % 8 === 0 ? 'Offline' : 'Online',
+        status: sIdx === 6 && pIdx % 8 === 0 ? 'Offline' : 'Online',
         lastPing: new Date(Date.now() - (sIdx * 120000)).toISOString(),
         currentReading: readingStr
       });
