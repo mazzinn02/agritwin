@@ -12,12 +12,10 @@ import UserManagement from './pages/UserManagement';
 
 import Dashboard from './pages/Dashboard';
 import CropComparison from './pages/CropComparison';
-import CropVision from './pages/CropVision';
+import CropHealthAdvisor from './pages/CropHealthAdvisor';
 import FieldLog from './pages/FieldLog';
 import Analytics from './pages/Analytics';
-import AIAdvisor from './pages/AIAdvisor';
 import WhatIfSimulator from './pages/WhatIfSimulator';
-import VirtualFarm from './pages/VirtualFarm';
 import MapView from './pages/MapView';
 import CameraFeed from './pages/CameraFeed';
 import MySensors from './pages/MySensors';
@@ -36,8 +34,6 @@ import { AgriStoreProvider } from './context/AgriStore';
 // Clean-Slate Gatekeeper: redirects to /onboarding if no farm/plot exists
 const CleanSlateGatekeeper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const rawProfile = typeof window !== 'undefined' ? localStorage.getItem('agri_farm_profile') : null;
-  const rawPlots = typeof window !== 'undefined' ? localStorage.getItem('agri_plots') : null;
 
   const isCleanSlate = false; // AgriStore seeds default IIIT Dharwad farm
 
@@ -94,24 +90,25 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              {/* Shared Routes (Both Admin and Farmer/Worker) */}
+              {/* Tier 1 & Shared Routes */}
               <Route index element={<Dashboard />} />
               <Route path="my-farms" element={<MyFarms />} />
-              <Route path="db-monitor" element={<DatabaseMonitor />} />
+              <Route path="crop-health" element={<CropHealthAdvisor />} />
+              <Route path="vision" element={<CropHealthAdvisor />} />
+              <Route path="advisor" element={<CropHealthAdvisor />} />
+              <Route path="virtual-farm" element={<CropHealthAdvisor />} />
               <Route path="analytics" element={<Analytics />} />
-              <Route path="vision" element={<CropVision />} />
+              <Route path="history" element={<FieldLog />} />
               <Route path="control" element={<DeviceControl />} />
               <Route path="camera" element={<CameraFeed />} />
               <Route path="map" element={<MapView />} />
 
-              {/* Admin-Only Routes */}
+              {/* Tier 2 & Tier 3 Admin Routes */}
+              <Route path="db-monitor" element={<AdminRoute><DatabaseMonitor /></AdminRoute>} />
               <Route path="add-farmland" element={<AdminRoute><AddNewFarmlandPage /></AdminRoute>} />
               <Route path="manual-telemetry" element={<AdminRoute><ManualTelemetryPage /></AdminRoute>} />
               <Route path="research" element={<AdminRoute><ResearchView /></AdminRoute>} />
-              <Route path="history" element={<AdminRoute><FieldLog /></AdminRoute>} />
-              <Route path="advisor" element={<AdminRoute><AIAdvisor /></AdminRoute>} />
               <Route path="what-if" element={<AdminRoute><WhatIfSimulator /></AdminRoute>} />
-              <Route path="virtual-farm" element={<AdminRoute><VirtualFarm /></AdminRoute>} />
               <Route path="sensors" element={<AdminRoute><MySensors /></AdminRoute>} />
               <Route path="compare" element={<AdminRoute><CropComparison /></AdminRoute>} />
               <Route path="farm-management/crops" element={<AdminRoute><Crops /></AdminRoute>} />

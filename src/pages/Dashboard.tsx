@@ -69,7 +69,7 @@ export const Dashboard = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedFarms, setExpandedFarms] = useState<Record<string, boolean>>({
-    farm_iiit_dharwad: true,
+    farm_iiit_dharwad: false,
     farm_smart_demo: false,
     farm_precision_center: false,
     farm_organic_research: false,
@@ -190,13 +190,6 @@ export const Dashboard = () => {
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <Link
-            to="/db-monitor"
-            className="px-3.5 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Database className="w-4 h-4 text-purple-400" />
-            DB Monitor
-          </Link>
           <button
             onClick={handleRunSeeder}
             disabled={seeding}

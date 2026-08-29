@@ -8,9 +8,7 @@ import {
   Map, 
   Camera, 
   Activity, 
-  Settings2, 
   GitCompare,
-  Grid,
   Sliders,
   ChevronDown,
   ChevronRight,
@@ -19,28 +17,19 @@ import {
   FileText,
   Users,
   LogOut,
-  ShieldCheck,
-  PlusCircle,
-  UserCheck,
-  Database,
   Building2,
   Radio,
-  BrainCircuit,
-  Bot,
-  TableProperties
+  Database
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const Sidebar: React.FC = () => {
-  const { userProfile, role, isAdmin, isFarmer, logout } = useAuth();
+  const { userProfile, role, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Collapsible Categories state
-  const [monitoringOpen, setMonitoringOpen] = useState(true);
-  const [farmOpen, setFarmOpen] = useState(true);
-  const [actionsOpen, setActionsOpen] = useState(true);
-  const [researchOpen, setResearchOpen] = useState(true);
-  const [adminOpen, setAdminOpen] = useState(true);
+  // Collapsible Accordions: Advanced & Administration
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -65,11 +54,16 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation Groups Container */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-4 text-xs font-medium">
+      {/* Navigation Container */}
+      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5 text-xs font-medium">
         
-        {/* 1. PRIMARY */}
+        {/* ── TIER 1: SIMPLE OPERATIONS (DEFAULT VIEW) ───────────────────────── */}
         <div className="space-y-1">
+          <div className="px-3 pb-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+            OPERATIONS
+          </div>
+
+          {/* 1. Dashboard */}
           <NavLink
             to="/"
             end
@@ -85,6 +79,7 @@ export const Sidebar: React.FC = () => {
             <span className="text-sm">Dashboard</span>
           </NavLink>
 
+          {/* 2. My Farms (Single entry - duplicate removed) */}
           <NavLink
             to="/my-farms"
             className={({ isActive }) =>
@@ -99,8 +94,9 @@ export const Sidebar: React.FC = () => {
             <span className="text-sm">My Farms</span>
           </NavLink>
 
+          {/* 3. Crop Health & Advisor (Consolidated AI Advisor + Crop Vision + Live Farm Grid) */}
           <NavLink
-            to="/db-monitor"
+            to="/vision"
             className={({ isActive }) =>
               `flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all duration-150 font-bold ${
                 isActive
@@ -109,81 +105,99 @@ export const Sidebar: React.FC = () => {
               }`
             }
           >
-            <Database className="w-4 h-4 text-purple-400" />
-            <span className="text-sm">DB & Realtime</span>
+            <Sprout className="w-4 h-4 text-lime-400" />
+            <span className="text-sm">Crop Health & Advisor</span>
+          </NavLink>
+
+          {/* 4. Field Log & Analytics */}
+          <NavLink
+            to="/analytics"
+            className={({ isActive }) =>
+              `flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all duration-150 font-bold ${
+                isActive
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`
+            }
+          >
+            <LineChart className="w-4 h-4 text-amber-400" />
+            <span className="text-sm">Records & Analytics</span>
+          </NavLink>
+
+          {/* 5. Device Control */}
+          <NavLink
+            to="/control"
+            className={({ isActive }) =>
+              `flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all duration-150 font-bold ${
+                isActive
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`
+            }
+          >
+            <Activity className="w-4 h-4 text-sky-400" />
+            <span className="text-sm">Device Control</span>
           </NavLink>
         </div>
 
-        {/* 2. MONITORING SECTION */}
+        {/* ── TIER 2: ADVANCED / RESEARCH & DIGITAL TWIN (COLLAPSIBLE) ─────────── */}
         <div className="border-t border-slate-800/80 pt-3">
           <button
-            onClick={() => setMonitoringOpen(!monitoringOpen)}
-            className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
+            onClick={() => setAdvancedOpen(!advancedOpen)}
+            className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
           >
-            <span>MONITORING</span>
-            {monitoringOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            <span>ADVANCED & DIGITAL TWIN</span>
+            {advancedOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
 
-          {monitoringOpen && (
-            <div className="mt-1.5 space-y-1 pl-1">
+          {advancedOpen && (
+            <div className="mt-1 space-y-1 pl-1 animate-fadeIn">
               <NavLink
-                to="/advisor"
+                to="/research"
                 className={({ isActive }) =>
                   `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
                     isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                   }`
                 }
               >
-                <BrainCircuit className="w-4 h-4 text-emerald-500" />
-                <span>AI Advisor</span>
+                <Database className="w-4 h-4 text-purple-400" />
+                <span>Research Workspace</span>
               </NavLink>
 
               <NavLink
-                to="/virtual-farm"
+                to="/map"
                 className={({ isActive }) =>
                   `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
                     isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                   }`
                 }
               >
-                <Grid className="w-4 h-4 text-emerald-500" />
-                <span>Live Farm</span>
+                <Map className="w-4 h-4 text-purple-400" />
+                <span>Map View</span>
               </NavLink>
 
               <NavLink
-                to="/vision"
+                to="/compare"
                 className={({ isActive }) =>
                   `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
                     isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                   }`
                 }
               >
-                <Sprout className="w-4 h-4 text-emerald-500" />
-                <span>Crop Health</span>
+                <GitCompare className="w-4 h-4 text-purple-400" />
+                <span>Crop Comparison</span>
               </NavLink>
 
               <NavLink
-                to="/history"
+                to="/what-if"
                 className={({ isActive }) =>
                   `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
                     isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                   }`
                 }
               >
-                <History className="w-4 h-4 text-emerald-500" />
-                <span>Field Log</span>
-              </NavLink>
-
-              <NavLink
-                to="/analytics"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                  }`
-                }
-              >
-                <LineChart className="w-4 h-4 text-emerald-500" />
-                <span>Analytics</span>
+                <Sliders className="w-4 h-4 text-purple-400" />
+                <span>What-If Simulator</span>
               </NavLink>
 
               <NavLink
@@ -194,47 +208,8 @@ export const Sidebar: React.FC = () => {
                   }`
                 }
               >
-                <Camera className="w-4 h-4 text-emerald-500" />
+                <Camera className="w-4 h-4 text-purple-400" />
                 <span>Camera Feed</span>
-              </NavLink>
-            </div>
-          )}
-        </div>
-
-        {/* 3. FARM & PLOTS */}
-        <div className="border-t border-slate-800/80 pt-3">
-          <button
-            onClick={() => setFarmOpen(!farmOpen)}
-            className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
-          >
-            <span>FARM</span>
-            {farmOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
-
-          {farmOpen && (
-            <div className="mt-1.5 space-y-1 pl-1">
-              <NavLink
-                to="/my-farms"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                  }`
-                }
-              >
-                <Building2 className="w-4 h-4 text-sky-400" />
-                <span>My Farms</span>
-              </NavLink>
-
-              <NavLink
-                to="/farm-management/crops"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                  }`
-                }
-              >
-                <FolderKanban className="w-4 h-4 text-sky-400" />
-                <span>Plots & Crops</span>
               </NavLink>
 
               <NavLink
@@ -245,146 +220,39 @@ export const Sidebar: React.FC = () => {
                   }`
                 }
               >
-                <Radio className="w-4 h-4 text-sky-400" />
-                <span>My Sensors</span>
+                <Radio className="w-4 h-4 text-purple-400" />
+                <span>My Sensors (Detailed)</span>
               </NavLink>
             </div>
           )}
         </div>
 
-        {/* 4. ACTIONS */}
-        <div className="border-t border-slate-800/80 pt-3">
-          <button
-            onClick={() => setActionsOpen(!actionsOpen)}
-            className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
-          >
-            <span>ACTIONS</span>
-            {actionsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
-
-          {actionsOpen && (
-            <div className="mt-1.5 space-y-1 pl-1">
-              {isAdmin && (
-                <NavLink
-                  to="/manual-telemetry"
-                  className={({ isActive }) =>
-                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                      isActive ? 'bg-indigo-600 text-white font-bold' : 'text-indigo-300 hover:bg-indigo-950/60'
-                    }`
-                  }
-                >
-                  <UserCheck className="w-4 h-4 text-indigo-400" />
-                  <span>+ Add Observation</span>
-                </NavLink>
-              )}
-
-              {isAdmin && (
-                <NavLink
-                  to="/add-farmland"
-                  className={({ isActive }) =>
-                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                      isActive ? 'bg-emerald-600 text-white font-bold' : 'text-emerald-300 hover:bg-emerald-950/60'
-                    }`
-                  }
-                >
-                  <PlusCircle className="w-4 h-4 text-emerald-400" />
-                  <span>+ Add New Farmland</span>
-                </NavLink>
-              )}
-
-              <NavLink
-                to="/control"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                  }`
-                }
-              >
-                <Activity className="w-4 h-4 text-amber-400" />
-                <span>Device Control</span>
-              </NavLink>
-            </div>
-          )}
-        </div>
-
-        {/* 5. RESEARCH & DIGITAL TWIN (ADMIN / RESEARCHER ROLE GATED) */}
-        {isAdmin && (
-          <div className="border-t border-slate-800/80 pt-3">
-            <button
-              onClick={() => setResearchOpen(!researchOpen)}
-              className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
-            >
-              <span>RESEARCH & DIGITAL TWIN</span>
-              {researchOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-            </button>
-
-            {researchOpen && (
-              <div className="mt-1.5 space-y-1 pl-1">
-                <NavLink
-                  to="/research"
-                  className={({ isActive }) =>
-                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                    }`
-                  }
-                >
-                  <Database className="w-4 h-4 text-purple-400" />
-                  <span>Research Workspace</span>
-                </NavLink>
-
-                <NavLink
-                  to="/map"
-                  className={({ isActive }) =>
-                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                    }`
-                  }
-                >
-                  <Map className="w-4 h-4 text-purple-400" />
-                  <span>Map View</span>
-                </NavLink>
-
-                <NavLink
-                  to="/compare"
-                  className={({ isActive }) =>
-                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                    }`
-                  }
-                >
-                  <GitCompare className="w-4 h-4 text-purple-400" />
-                  <span>Crop Comparison</span>
-                </NavLink>
-
-                <NavLink
-                  to="/what-if"
-                  className={({ isActive }) =>
-                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                      isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                    }`
-                  }
-                >
-                  <Sliders className="w-4 h-4 text-purple-400" />
-                  <span>What-If Simulator</span>
-                </NavLink>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 6. ADMINISTRATION (ADMIN ONLY GATED BY REAL AUTH ROLE) */}
+        {/* ── TIER 3: SYSTEM / ADMINISTRATION (ADMIN ROLE ONLY) ───────────────── */}
         {isAdmin && (
           <div className="border-t border-slate-800/80 pt-3">
             <button
               onClick={() => setAdminOpen(!adminOpen)}
-              className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors"
             >
               <span>ADMINISTRATION</span>
               {adminOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </button>
 
             {adminOpen && (
-              <div className="mt-1.5 space-y-1 pl-1">
+              <div className="mt-1 space-y-1 pl-1 animate-fadeIn">
+                {/* System Diagnostics (renamed from DB & Realtime, admin-only) */}
+                <NavLink
+                  to="/db-monitor"
+                  className={({ isActive }) =>
+                    `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                      isActive ? 'bg-indigo-900/60 text-indigo-300 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`
+                  }
+                >
+                  <Database className="w-4 h-4 text-indigo-400" />
+                  <span>System Diagnostics</span>
+                </NavLink>
+
                 <NavLink
                   to="/users"
                   className={({ isActive }) =>
@@ -398,15 +266,15 @@ export const Sidebar: React.FC = () => {
                 </NavLink>
 
                 <NavLink
-                  to="/sensors"
+                  to="/farm-management/crops"
                   className={({ isActive }) =>
                     `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
                       isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                     }`
                   }
                 >
-                  <Radio className="w-4 h-4 text-indigo-400" />
-                  <span>Sensors & Devices</span>
+                  <FolderKanban className="w-4 h-4 text-indigo-400" />
+                  <span>Plots & Crop Config</span>
                 </NavLink>
 
                 <NavLink
