@@ -30,8 +30,6 @@ import {
 import { SEEDED_CROPS, CropData } from '../../lib/crop-management';
 import { AreaUnitInput, AreaUnit } from '../common/AreaUnitInput';
 import { PlantCanopySvg } from '../common/PlantCanopySvg';
-import { ref, set, push } from '../../lib/firebase';
-import { db } from '../../lib/firebase';
 import { logFieldAction } from '../../lib/audit-log';
 import { saveFarmProfile, saveCrops, savePlots, saveSensors, saveHistory, convertAreaToSqm } from '../../lib/farm-storage';
 
@@ -206,7 +204,7 @@ export const GuidedOnboardingWizard: React.FC = () => {
     const areaSqm = convertAreaToSqm(plotAreaValue, areaUnitStr as any);
     const now = new Date().toISOString();
 
-    // 1. Firebase Realtime Database
+    // 1. Unified Storage
     const plotId = plotCode.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
     const plotPayload = {
       id: plotId,
@@ -236,28 +234,8 @@ export const GuidedOnboardingWizard: React.FC = () => {
       optimalMoistureMax: crop.moistureMax,
       airTemp: 24.2,
       soilPh: 6.5,
-      nitrogen: 45,
-      vpd: 1.05,
-      dripIrrigationActive: false,
-      hvacActive: false,
-      created_at: now
+      vpd: 1.05
     };
-
-    await set(ref(db, `plots/${plotId}`), plotPayload);
-    await set(ref(db, `devices/${plotId}`), {
-      irrigation: { enabled: false, mode: 'auto' },
-      hvac: { enabled: false, mode: 'auto' },
-      growLight: { enabled: false, mode: 'manual' }
-    });
-    await set(ref(db, `live_readings/${plotId}`), {
-      moisture: previewMoisture,
-      temp: 24.2,
-      humidity: 62,
-      soilPh: 6.5,
-      sunlightLux: 650,
-      vpd: 1.05,
-      timestamp: Date.now()
-    });
 
     // 2. Unified Local Storage Synchronizations
     saveFarmProfile({

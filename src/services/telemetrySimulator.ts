@@ -1,11 +1,10 @@
 import { PlotBed, Crop, TelemetryObservation } from '../types';
 import { getParameterDefinition } from '../lib/parameters';
-import { saveTelemetryBatchToFirestore } from '../lib/firebase';
 import { saveTelemetryBatchToSupabase } from '../lib/supabase';
 
 // ─── SIMULATION INTERVAL ────────────────────────────────────────────────────
 // Data is generated every 12 seconds and written directly to:
-//   Firestore DB → collection: "telemetry_observations"
+//   Supabase PostgreSQL → table: "public.telemetry_observations"
 // Each document has: farmId, plotId, sensorId, parameterKey, value, dataSource: "SIMULATED"
 export const DEMO_TELEMETRY_INTERVAL_MS = 12000;
 
@@ -274,24 +273,17 @@ class TelemetrySimulatorService {
       `observations generated: ${generatedObs.length}`
     );
     console.log(
-      `  📦 Writing ${generatedObs.length} docs → Firestore collection: "telemetry_observations" [dataSource: SIMULATED]`
+      `  📦 Writing ${generatedObs.length} records → Supabase table: "public.telemetry_observations" [dataSource: SIMULATED]`
     );
 
     if (generatedObs.length === 0) return;
 
-    // 1. Persist generated observations to Supabase PostgreSQL
+    // Persist generated observations directly to Supabase PostgreSQL
     try {
       await saveTelemetryBatchToSupabase(generatedObs);
+      console.log(`TelemetrySimulator: Persisted ${generatedObs.length} simulated observations to Supabase.`);
     } catch (err: any) {
       console.warn('TelemetrySimulator: Supabase write notice:', err?.message);
-    }
-
-    // 2. Persist to Firestore (fallback/secondary)
-    try {
-      await saveTelemetryBatchToFirestore(generatedObs);
-      console.log(`TelemetrySimulator: Persisted ${generatedObs.length} simulated observations.`);
-    } catch (err: any) {
-      console.error('TelemetrySimulator: Firestore write failed:', err);
     }
 
     // Trigger local callback if provided

@@ -22,12 +22,12 @@ export const PrototypeModeBanner: React.FC = () => {
               {isDemoTelemetryActive ? 'SIMULATED STREAM ACTIVE' : 'PROTOTYPE MODE ACTIVE'}
             </span>
             <span className="text-xs font-bold text-slate-300">
-              {isDemoTelemetryActive ? 'Real-time background demo telemetry generating to Firestore.' : 'Physical IoT hardware pending gateway connection.'}
+              {isDemoTelemetryActive ? 'Real-time background demo telemetry generating to Supabase.' : 'Physical IoT hardware pending gateway connection.'}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5">
             {isDemoTelemetryActive ? (
-              <span>DEMO TELEMETRY ACTIVE — Values are generated for prototype testing and persisted to Firestore (<code className="text-emerald-300 font-mono text-[10px]">dataSource = "SIMULATED"</code>).</span>
+              <span>DEMO TELEMETRY ACTIVE — Values are generated for prototype testing and persisted to Supabase (<code className="text-emerald-300 font-mono text-[10px]">dataSource = "SIMULATED"</code>).</span>
             ) : (
               <span>System is executing on authoritative manually entered observations (<code className="text-indigo-300 font-mono text-[10px]">dataSource = "MANUAL_PROTOTYPE"</code>).</span>
             )}

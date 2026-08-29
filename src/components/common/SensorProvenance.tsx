@@ -62,7 +62,7 @@ export const SensorProvenance: React.FC<SensorProvenanceProps> = ({
                 className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center space-x-0.5 cursor-pointer underline"
               >
                 <Code className="w-2.5 h-2.5" />
-                <span>Inspect Firestore Payload</span>
+                <span>Inspect Supabase Payload</span>
               </button>
             </div>
           </div>
@@ -89,7 +89,7 @@ export const SensorProvenance: React.FC<SensorProvenanceProps> = ({
               type="button"
               onClick={() => setShowInspector(true)}
               className="ml-1 text-[9px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center space-x-0.5 cursor-pointer hover:underline"
-              title="Click to view exact Firestore Document & Relational Foreign Keys"
+              title="Click to view exact Supabase Record & Relational Foreign Keys"
             >
               <Code className="w-2.5 h-2.5" />
               <span>JSON</span>
@@ -98,7 +98,7 @@ export const SensorProvenance: React.FC<SensorProvenanceProps> = ({
         )}
       </div>
 
-      {/* Firestore Raw Record Inspector Modal */}
+      {/* Supabase Raw Record Inspector Modal */}
       {showInspector && (
         <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 text-white rounded-3xl border border-indigo-500/40 shadow-2xl max-w-xl w-full p-6 space-y-4 font-sans text-xs">
@@ -108,7 +108,7 @@ export const SensorProvenance: React.FC<SensorProvenanceProps> = ({
                   <Database className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-white">Firestore Provenance Inspector</h3>
+                  <h3 className="text-base font-black text-white">Supabase Provenance Inspector</h3>
                   <p className="text-[11px] text-slate-400">Database & Relational Foreign Key Verification</p>
                 </div>
               </div>
@@ -168,7 +168,7 @@ export const SensorProvenance: React.FC<SensorProvenanceProps> = ({
             {/* Exact JSON Payload */}
             <div>
               <div className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider mb-1">
-                Firestore Document JSON Payload
+                Supabase Record JSON Payload
               </div>
               <pre className="p-3 bg-slate-950 rounded-2xl border border-slate-800 text-[11px] font-mono text-emerald-300 overflow-x-auto max-h-56">
                 {JSON.stringify(obs, null, 2)}

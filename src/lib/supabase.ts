@@ -1,7 +1,6 @@
 /// <reference types="vite/client" />
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { TelemetryObservation } from '../types';
-import { saveTelemetryBatchToFirestore, saveTelemetryObservationToFirestore } from './firebase';
 
 const env = (import.meta as any).env || {};
 const SUPABASE_URL = env.VITE_SUPABASE_URL || 'https://xyzcompany.supabase.co';
@@ -98,73 +97,42 @@ export function setRealtimeStatus(status: RealtimeStatusType) {
   statusListeners.forEach(cb => cb(status));
 }
 
-// 1. Single Observation Insert with Firebase Fallback & Verification Logging
+// 1. Single Observation Insert with Verification Logging
 export async function saveTelemetryObservationToSupabase(obs: TelemetryObservation): Promise<void> {
-  let supabaseSuccess = false;
-
-  if (isSupabaseConfigured) {
-    try {
-      const row = mapObsToSupabaseRow(obs);
-      const { error } = await supabase.from('telemetry_observations').upsert(row);
-      if (error) {
-        console.error('[SUPABASE FAILED]', error.message);
-      } else {
-        supabaseSuccess = true;
-        console.log(`[SUPABASE VERIFIED]\nRecord ID: ${obs.id}\nTimestamp: ${obs.measurementTimestamp}`);
-        emitToast('Telemetry saved to Supabase successfully', 'success');
-      }
-    } catch (err: any) {
-      console.error('[SUPABASE FAILED]', err?.message);
+  if (!isSupabaseConfigured) return;
+  try {
+    const row = mapObsToSupabaseRow(obs);
+    const { error } = await supabase.from('telemetry_observations').upsert(row);
+    if (error) {
+      console.error('[SUPABASE WRITE ERROR]', error.message);
+    } else {
+      console.log(`[SUPABASE VERIFIED]\nRecord ID: ${obs.id}\nTimestamp: ${obs.measurementTimestamp}`);
+      emitToast('Telemetry saved to Supabase successfully', 'success');
     }
-  }
-
-  // F. Firebase Fallback if Supabase failed or not configured
-  if (!supabaseSuccess) {
-    console.log('[SUPABASE FAILED]\n[FIREBASE FALLBACK ACTIVE]');
-    try {
-      await saveTelemetryObservationToFirestore(obs);
-      console.log(`[FIREBASE FALLBACK] Saved observation ${obs.id} to Firestore.`);
-    } catch (fbErr: any) {
-      console.warn('[FIREBASE FALLBACK NOTICE]', fbErr?.message);
-    }
+  } catch (err: any) {
+    console.error('[SUPABASE WRITE EXCEPTION]', err?.message);
   }
 }
 
-// 2. Batch Observation Insert (12-second simulator cycles) with Firebase Fallback
+// 2. Batch Observation Insert (12-second simulator cycles)
 export async function saveTelemetryBatchToSupabase(observations: TelemetryObservation[]): Promise<void> {
-  if (!observations || observations.length === 0) return;
-  let supabaseSuccess = false;
-
-  if (isSupabaseConfigured) {
-    try {
-      const rows = observations.map(mapObsToSupabaseRow);
-      const { error } = await supabase.from('telemetry_observations').upsert(rows);
-      if (error) {
-        console.error('[SUPABASE FAILED]', error.message);
-      } else {
-        supabaseSuccess = true;
-        const lastRecord = observations[observations.length - 1];
-        console.log(`[SUPABASE VERIFIED]\nRecord ID: ${lastRecord.id}\nTimestamp: ${lastRecord.measurementTimestamp}`);
-        console.log(
-          `%c[SUPABASE WRITE SUCCESS] Inserted ${observations.length} telemetry records into public.telemetry_observations`,
-          'color: #3ecf8e; font-weight: bold;'
-        );
-        emitToast(`Telemetry saved to Supabase successfully (${observations.length} records)`, 'success');
-      }
-    } catch (err: any) {
-      console.error('[SUPABASE FAILED]', err?.message);
+  if (!isSupabaseConfigured || !observations || observations.length === 0) return;
+  try {
+    const rows = observations.map(mapObsToSupabaseRow);
+    const { error } = await supabase.from('telemetry_observations').upsert(rows);
+    if (error) {
+      console.error('[SUPABASE BATCH WRITE ERROR]', error.message);
+    } else {
+      const lastRecord = observations[observations.length - 1];
+      console.log(`[SUPABASE VERIFIED]\nRecord ID: ${lastRecord.id}\nTimestamp: ${lastRecord.measurementTimestamp}`);
+      console.log(
+        `%c[SUPABASE WRITE SUCCESS] Inserted ${observations.length} telemetry records into public.telemetry_observations`,
+        'color: #3ecf8e; font-weight: bold;'
+      );
+      emitToast(`Telemetry saved to Supabase successfully (${observations.length} records)`, 'success');
     }
-  }
-
-  // F. Firebase Fallback if Supabase failed
-  if (!supabaseSuccess) {
-    console.log('[SUPABASE FAILED]\n[FIREBASE FALLBACK ACTIVE]');
-    try {
-      await saveTelemetryBatchToFirestore(observations);
-      console.log(`[FIREBASE FALLBACK ACTIVE] Saved ${observations.length} observations to Firestore.`);
-    } catch (fbErr: any) {
-      console.warn('[FIREBASE FALLBACK NOTICE]', fbErr?.message);
-    }
+  } catch (err: any) {
+    console.error('[SUPABASE BATCH EXCEPTION]', err?.message);
   }
 }
 

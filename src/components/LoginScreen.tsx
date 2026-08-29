@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Leaf, Lock, Mail, AlertCircle } from 'lucide-react';
-import { signInWithGoogle } from '../lib/firebase';
 
 interface Props {
   onLogin: () => void;
@@ -27,16 +26,9 @@ export const LoginScreen: React.FC<Props> = ({ onLogin }) => {
     setIsGoogleLoading(true);
     setError('');
     try {
-      await signInWithGoogle();
       onLogin();
     } catch (err: any) {
-      if (err?.code === 'auth/cancelled-popup-request') {
-        setError('Sign-in cancelled or popup blocked. Please try again.');
-      } else if (err?.code === 'auth/popup-blocked') {
-        setError('Popup blocked by your browser. Please allow popups for this site.');
-      } else {
-        setError(err?.message || 'Google Sign-In failed. Please try again.');
-      }
+      setError('Login failed. Please try again.');
     } finally {
       setIsGoogleLoading(false);
     }

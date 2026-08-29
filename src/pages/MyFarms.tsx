@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { useAgriStore } from '../context/AgriStore';
 import { telemetrySimulator, DEMO_TELEMETRY_INTERVAL_MS } from '../services/telemetrySimulator';
-import { FIRESTORE_DATABASE_ID } from '../lib/firebase';
 import { isSupabaseConfigured } from '../lib/supabase';
 
 function secsAgo(ts: number | null): string {
@@ -296,7 +295,7 @@ const SectionCard: React.FC<SectionCardProps> = ({ section, crop, telemetry, las
                 <div className="p-1.5 bg-purple-100 rounded-lg"><Activity className="w-4 h-4 text-purple-600" /></div>
                 <div>
                   <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">📊 Live Readings</div>
-                  <div className="text-[10px] text-purple-600 font-bold">SIMULATED → Firestore</div>
+                  <div className="text-[10px] text-emerald-600 font-bold">SIMULATED → Supabase</div>
                 </div>
               </div>
               <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
@@ -418,7 +417,7 @@ const MyFarms: React.FC = () => {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-[11px] text-slate-500">
               <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Interval: <strong className="text-slate-700 ml-1">{DEMO_TELEMETRY_INTERVAL_MS / 1000}s</strong></span>
               <span className="text-slate-300">|</span>
-              <span className="flex items-center gap-1"><Database className="w-3 h-3 text-purple-500" /> Writing to: <strong className="text-purple-600 ml-1">Firestore → telemetry_observations</strong></span>
+              <span className="flex items-center gap-1"><Database className="w-3 h-3 text-emerald-500" /> Writing to: <strong className="text-emerald-600 ml-1">Supabase → telemetry_observations</strong></span>
               <span className="text-slate-300">|</span>
               <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Last cycle: <strong className="text-slate-700 ml-1">{secsSinceLastCycle !== null ? `${secsSinceLastCycle}s ago` : 'Pending…'}</strong></span>
               <span className="text-slate-300">|</span>

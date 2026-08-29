@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { ref, onValue, set } from '../lib/firebase';
-import { db } from '../lib/firebase';
 import { Settings2, Droplet, Wind, Sun, Sprout } from 'lucide-react';
 import { logFieldAction } from '../lib/audit-log';
 import { getPlots, getCrops } from '../lib/farm-storage';
@@ -10,7 +8,11 @@ export const DeviceControl = () => {
   const [plots, setPlots] = useState<PlotBed[]>([]);
   const [crops, setCrops] = useState<Crop[]>([]);
   const [selectedPlot, setSelectedPlot] = useState('');
-  const [controls, setControls] = useState<any>(null);
+  const [controls, setControls] = useState<any>({
+    irrigation: { enabled: false, mode: 'auto' },
+    hvac: { enabled: false, mode: 'auto' },
+    growLight: { enabled: false, mode: 'manual' }
+  });
 
   useEffect(() => {
     const loadedPlots = getPlots();
@@ -22,29 +24,17 @@ export const DeviceControl = () => {
     }
   }, []);
 
-  useEffect(() => {
-    if (!selectedPlot) return;
-    const deviceRef = ref(db, `devices/${selectedPlot}`);
-    const unsubscribe = onValue(deviceRef, (snapshot) => {
-      setControls(snapshot.val() || {
-        irrigation: { enabled: false, mode: 'auto' },
-        hvac: { enabled: false, mode: 'auto' },
-        growLight: { enabled: false, mode: 'manual' }
-      });
-    });
-    return () => unsubscribe();
-  }, [selectedPlot]);
-
   const activePlotObj = plots.find(p => p.id === selectedPlot) || plots[0];
   const plotCode = activePlotObj ? activePlotObj.code : selectedPlot;
 
   const toggleDevice = async (device: string, currentEnabled: boolean, mode: string) => {
     const nextState = !currentEnabled;
     const cleanMode = (mode || 'auto').toLowerCase();
-    await set(ref(db, `devices/${selectedPlot}/${device}`), {
-      enabled: nextState,
-      mode: cleanMode
-    });
+
+    setControls((prev: any) => ({
+      ...prev,
+      [device]: { enabled: nextState, mode: cleanMode }
+    }));
 
     const actionType = device === 'growLight' ? 'grow_light' : (device as any);
     const triggeredBy = cleanMode === 'auto' ? 'auto' : 'manual';
@@ -61,10 +51,11 @@ export const DeviceControl = () => {
   const toggleMode = async (device: string, enabled: boolean, currentMode: string) => {
     const isAuto = (currentMode || '').toLowerCase() === 'auto';
     const nextMode = isAuto ? 'manual' : 'auto';
-    await set(ref(db, `devices/${selectedPlot}/${device}`), {
-      enabled: enabled,
-      mode: nextMode
-    });
+
+    setControls((prev: any) => ({
+      ...prev,
+      [device]: { enabled, mode: nextMode }
+    }));
 
     const actionType = device === 'growLight' ? 'grow_light' : (device as any);
     await logFieldAction(

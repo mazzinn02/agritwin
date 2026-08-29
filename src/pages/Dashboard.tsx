@@ -32,7 +32,6 @@ import { PrototypeModeBanner } from '../components/common/PrototypeModeBanner';
 import { SensorProvenance } from '../components/common/SensorProvenance';
 import { useAgriStore } from '../context/AgriStore';
 import { telemetrySimulator, DEMO_TELEMETRY_INTERVAL_MS } from '../services/telemetrySimulator';
-import { FIRESTORE_DATABASE_ID } from '../lib/firebase';
 import { isSupabaseConfigured } from '../lib/supabase';
 
 function secsAgo(ts: string | number | null): string {
@@ -466,7 +465,7 @@ export const Dashboard = () => {
           </div>
 
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-            <span className="font-mono">DB: {FIRESTORE_DATABASE_ID.slice(0, 30)}…</span>
+            <span className="font-mono text-emerald-600 font-bold">Engine: Supabase PostgreSQL</span>
             <Link to="/my-farms" className="flex items-center gap-1 text-purple-600 hover:text-purple-800 font-bold">
               View full hierarchy <ExternalLink className="w-3 h-3" />
             </Link>

@@ -1,6 +1,3 @@
-import { ref, get, set, push, remove } from './firebase';
-import { db } from './firebase';
-
 export interface CropData {
   id: string;
   name: string;
@@ -216,23 +213,6 @@ export const COMMON_CROP_PRESETS = [
 ];
 
 export const ensureCropsSeeded = async (): Promise<Record<string, CropData>> => {
-  const cropsRef = ref(db, 'crops');
-  const snap = await get(cropsRef);
-
-  if (snap.exists()) {
-    const val = snap.val();
-    const result: Record<string, CropData> = {};
-    Object.entries(val).forEach(([id, item]: any) => {
-      result[id] = { id, ...item };
-    });
-    return result;
-  }
-
-  // Seed with the 4 real varieties
-  for (const [id, data] of Object.entries(SEEDED_CROPS)) {
-    await set(ref(db, `crops/${id}`), data);
-  }
-
   const result: Record<string, CropData> = {};
   for (const [id, data] of Object.entries(SEEDED_CROPS)) {
     result[id] = { id, ...data };
@@ -241,30 +221,5 @@ export const ensureCropsSeeded = async (): Promise<Record<string, CropData>> => 
 };
 
 export const checkCropAssignedToPlot = async (cropId: string, cropName: string): Promise<string | null> => {
-  try {
-    const plotsRef = ref(db, 'plots');
-    const snap = await get(plotsRef);
-    if (!snap.exists()) return null;
-
-    const plots = snap.val();
-    const normalizedCropName = cropName.toLowerCase();
-
-    for (const [plotId, plotData] of Object.entries(plots) as any[]) {
-      const pCrop = (plotData.crop || '').toLowerCase();
-      const pName = (plotData.name || '').toLowerCase();
-
-      // Check if plot crop matches or cropId matches
-      if (
-        plotData.cropId === cropId || 
-        pCrop.includes(normalizedCropName) || 
-        normalizedCropName.includes(pCrop) ||
-        pName.includes(normalizedCropName)
-      ) {
-        return plotData.name || plotId;
-      }
-    }
-  } catch (err) {
-    console.error('Error checking crop assignment:', err);
-  }
   return null;
 };

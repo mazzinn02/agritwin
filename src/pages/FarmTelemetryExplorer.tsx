@@ -434,7 +434,7 @@ export const FarmTelemetryExplorer: React.FC = () => {
             </div>
             <div className="flex items-center space-x-1 text-[10px] text-slate-400">
               <RefreshCw className="w-3 h-3" />
-              <span>Auto-updated from Firestore</span>
+              <span>Auto-updated from Supabase</span>
             </div>
           </div>
 

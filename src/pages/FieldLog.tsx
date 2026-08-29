@@ -116,7 +116,7 @@ export const FieldLog: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Authoritative historical ledger stored in Firestore. Filter by plot, source, or parameter key.
+              Authoritative historical ledger stored in Supabase PostgreSQL. Filter by plot, source, or parameter key.
             </p>
           </div>
         </div>

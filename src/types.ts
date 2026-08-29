@@ -87,11 +87,13 @@ export interface AuditLogEntry {
   details: string;
 }
 
+export type UserRole = 'admin' | 'farmer';
+
 export interface UserProfile {
   uid: string;
   email: string;
   full_name: string;
-  role: 'admin' | 'farmer';
+  role: UserRole;
   assigned_farm_ids: string[];
   created_at: string;
 }

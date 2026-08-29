@@ -1,7 +1,6 @@
-import { ref, push, get } from './firebase';
-import { db } from './firebase';
 import { AuditLogEntry } from '../types';
 import { addFieldAuditLog, getFieldAuditLogs as getStorageAuditLogs } from './farm-storage';
+import { supabase, isSupabaseConfigured } from './supabase';
 
 export type FieldAuditLogEntry = AuditLogEntry;
 
@@ -25,12 +24,21 @@ export const logFieldAction = async (
     details
   });
 
-  // 2. Save to Firebase
-  try {
-    const auditRef = ref(db, 'field_audit_log');
-    await push(auditRef, localEntry);
-  } catch (err) {
-    console.error('Failed to log field action to Firebase:', err);
+  // 2. Save to Supabase PostgreSQL
+  if (isSupabaseConfigured) {
+    try {
+      await supabase.from('audit_logs').insert({
+        id: localEntry.id,
+        plot_id,
+        plot_code: code,
+        action_type,
+        triggered_by,
+        details,
+        created_at: timestamp
+      });
+    } catch (err) {
+      console.warn('Failed to log field action to Supabase:', err);
+    }
   }
 
   if (typeof window !== 'undefined') {
@@ -44,18 +52,24 @@ export const getFieldAuditLogs = async (): Promise<AuditLogEntry[]> => {
   const localLogs = getStorageAuditLogs();
   if (localLogs.length > 0) return localLogs;
 
-  try {
-    const auditRef = ref(db, 'field_audit_log');
-    const snapshot = await get(auditRef);
-    if (!snapshot.exists()) return [];
-    const val = snapshot.val();
-    return Object.entries(val).map(([k, v]: [string, any]) => ({
-      id: k,
-      plot_code: v.plot_code || v.plot_id || 'S-01',
-      ...v
-    })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  } catch (err) {
-    console.error('Failed to fetch field audit logs:', err);
-    return [];
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        return data.map((d: any) => ({
+          id: d.id,
+          plot_id: d.plot_id,
+          plot_code: d.plot_code,
+          action_type: d.action_type,
+          triggered_by: d.triggered_by,
+          timestamp: d.created_at,
+          details: d.details
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed to fetch audit logs from Supabase:', err);
+    }
   }
+
+  return [];
 };

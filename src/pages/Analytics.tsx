@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ref, get, query, orderByChild, startAt, endAt } from '../lib/firebase';
-import { db } from '../lib/firebase';
 import { fetchComparisonData, saveComparisonSession } from '../lib/comparison-helper';
 import { STAGES_ORDER } from '../lib/gdd-calculator';
 import {

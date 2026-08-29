@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Leaf, Lock, Mail, User, ShieldCheck, Sprout, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { UserRole } from '../lib/firebase';
+import { UserRole } from '../types';
 
 export const SignUp: React.FC = () => {
   const navigate = useNavigate();

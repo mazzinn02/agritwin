@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { Crop, Farmland, PlotBed, UserProfile, AuditLogEntry, TelemetryObservation } from '../types';
-import { saveTelemetryObservationToFirestore, subscribeToFirestoreTelemetry, saveFarmsToFirestore, savePlotsToFirestore } from '../lib/firebase';
-import { saveFarmsToSupabase, savePlotsToSupabase, subscribeToSupabaseMultiTable, isSupabaseConfigured } from '../lib/supabase';
+import { saveFarmsToSupabase, savePlotsToSupabase, subscribeToSupabaseMultiTable, saveTelemetryObservationToSupabase, isSupabaseConfigured } from '../lib/supabase';
 import { telemetrySimulator } from '../services/telemetrySimulator';
 
 export const STORE_KEYS = {
@@ -385,10 +384,8 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return stored === null ? true : stored === 'true';
   });
 
-  // 0. Seed farms and plots to Supabase & Firestore on mount
+  // 0. Seed farms and plots to Supabase on mount
   useEffect(() => {
-    saveFarmsToFirestore(farmlands);
-    savePlotsToFirestore(plots);
     saveFarmsToSupabase(farmlands);
     savePlotsToSupabase(plots);
 
@@ -398,13 +395,13 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         '%c[AgriTwin Database Engine] Active',
         'color: #3ecf8e; font-weight: bold; font-size: 12px;'
       );
-      console.log(`  🟢 Supabase Status: ${isSupabaseConfigured ? 'CONNECTED' : 'STANDBY (Awaiting VITE_SUPABASE_URL in .env)'}`);
+      console.log(`  🟢 Supabase Status: ${isSupabaseConfigured ? 'CONNECTED' : 'STANDBY'}`);
       console.log('  📂 public.farms / public.plots / public.telemetry_observations');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 1. Real-time Telemetry Subscription (Supabase Realtime + Firestore fallback)
+  // 1. Real-time Telemetry Subscription (Supabase Realtime)
   useEffect(() => {
     // Helper to merge incoming telemetry observations into state
     const processIncomingTelemetry = (incomingObs: TelemetryObservation[]) => {
@@ -442,11 +439,9 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
 
     const unsubSupabase = subscribeToSupabaseMultiTable(processIncomingTelemetry);
-    const unsubFirestore = subscribeToFirestoreTelemetry(processIncomingTelemetry);
 
     return () => {
       unsubSupabase();
-      unsubFirestore();
     };
   }, []);
 
@@ -671,8 +666,8 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     setTelemetryObservations(prev => [newObs, ...prev]);
 
-    // Save directly to real Firestore database
-    saveTelemetryObservationToFirestore(newObs);
+    // Save directly to Supabase PostgreSQL database
+    saveTelemetryObservationToSupabase(newObs);
 
     // Update target plot's Digital Twin state
     setPlots(prev => prev.map(p => {

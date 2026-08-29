@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ref, get } from '../lib/firebase';
-import { db } from '../lib/firebase';
 import { fetchComparisonData, saveComparisonSession } from '../lib/comparison-helper';
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Save, Layers, CheckSquare, Square, Sprout } from 'lucide-react';
@@ -29,15 +27,7 @@ export const CropComparison: React.FC = () => {
     setSelectedPlots(initialPlotIds);
 
     const fetchSessions = async () => {
-      try {
-        const snapshot = await get(ref(db, 'comparison_sessions'));
-        if (snapshot.exists()) {
-          const sessions = Object.entries(snapshot.val()).map(([id, data]: any) => ({ id, ...data }));
-          setSavedSessions(sessions);
-        }
-      } catch (e) {
-        // ignore
-      }
+      // Local persistent comparison sessions
     };
     fetchSessions();
 
@@ -82,11 +72,6 @@ export const CropComparison: React.FC = () => {
     if (!sessionName || !selectedPlots.length) return;
     await saveComparisonSession(sessionName, selectedPlots, parameter);
     setSessionName('');
-    const snapshot = await get(ref(db, 'comparison_sessions'));
-    if (snapshot.exists()) {
-      const sessions = Object.entries(snapshot.val()).map(([id, data]: any) => ({ id, ...data }));
-      setSavedSessions(sessions);
-    }
     alert('Comparison session saved successfully!');
   };
 
