@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { Crop, Farmland, PlotBed, UserProfile, AuditLogEntry, TelemetryObservation } from '../types';
-import { saveTelemetryObservationToFirestore, subscribeToFirestoreTelemetry } from '../lib/firebase';
+import { saveTelemetryObservationToFirestore, subscribeToFirestoreTelemetry, saveFarmsToFirestore, savePlotsToFirestore } from '../lib/firebase';
+import { saveFarmsToSupabase, savePlotsToSupabase, subscribeToSupabaseMultiTable, isSupabaseConfigured } from '../lib/supabase';
 import { telemetrySimulator } from '../services/telemetrySimulator';
 
 export const STORE_KEYS = {
@@ -321,7 +322,7 @@ const loadInitialState = <T,>(key: string, seed: T): T => {
       return seed;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(seed) ? (Array.isArray(parsed) ? parsed : seed) : (parsed || seed);
+    return Array.isArray(seed) ? ((Array.isArray(parsed) ? parsed : seed) as unknown as T) : ((parsed || seed) as T);
   } catch (e) {
     return seed;
   }
@@ -338,8 +339,10 @@ const SEED_PLOT_FARM_MAP: Record<string, string> = {
 };
 
 const migratePlotFarmIds = (plots: PlotBed[]): PlotBed[] => {
+  if (!Array.isArray(plots)) return SEED_SECTIONS;
   let patched = false;
   const result = plots.map(p => {
+    if (!p) return p;
     if (!p.farmId && SEED_PLOT_FARM_MAP[p.id]) {
       patched = true;
       return { ...p, farmId: SEED_PLOT_FARM_MAP[p.id] };
@@ -374,22 +377,48 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return loadInitialState(STORE_KEYS.CURRENT_USER, SEED_USERS[0]);
   });
 
+  // Auto-start simulator on mount for client demo — sensor data flows immediately
   const [isDemoTelemetryActive, setIsDemoTelemetryActive] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(STORE_KEYS.DEMO_TELEMETRY_ACTIVE) === 'true';
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem(STORE_KEYS.DEMO_TELEMETRY_ACTIVE);
+    // Default to TRUE so dummy data flows automatically for client demo
+    return stored === null ? true : stored === 'true';
   });
 
-  // 1. Real-time Firestore Subscription for Telemetry Observations
+  // 0. Seed farms and plots to Supabase & Firestore on mount
   useEffect(() => {
-    const unsubscribe = subscribeToFirestoreTelemetry((incomingObs) => {
+    saveFarmsToFirestore(farmlands);
+    savePlotsToFirestore(plots);
+    saveFarmsToSupabase(farmlands);
+    savePlotsToSupabase(plots);
+
+    if (typeof window !== 'undefined') {
+      (window as any).__agriSimulator = telemetrySimulator;
+      console.log(
+        '%c[AgriTwin Database Engine] Active',
+        'color: #3ecf8e; font-weight: bold; font-size: 12px;'
+      );
+      console.log(`  🟢 Supabase Status: ${isSupabaseConfigured ? 'CONNECTED' : 'STANDBY (Awaiting VITE_SUPABASE_URL in .env)'}`);
+      console.log('  📂 public.farms / public.plots / public.telemetry_observations');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 1. Real-time Telemetry Subscription (Supabase Realtime + Firestore fallback)
+  useEffect(() => {
+    // Helper to merge incoming telemetry observations into state
+    const processIncomingTelemetry = (incomingObs: TelemetryObservation[]) => {
       setTelemetryObservations(prev => {
         const obsMap = new Map<string, TelemetryObservation>();
-        prev.forEach(o => obsMap.set(o.id, o));
-        incomingObs.forEach(o => obsMap.set(o.id, o));
+        (prev || []).forEach(o => { if (o && o.id) obsMap.set(o.id, o); });
+        (incomingObs || []).forEach(o => { if (o && o.id) obsMap.set(o.id, o); });
 
-        const mergedList = Array.from(obsMap.values()).sort(
-          (a, b) => new Date(b.measurementTimestamp).getTime() - new Date(a.measurementTimestamp).getTime()
-        );
+        const validObs = Array.from(obsMap.values()).filter(o => o && o.id && o.measurementTimestamp);
+        const mergedList = validObs.sort((a, b) => {
+          const tA = new Date(a.measurementTimestamp).getTime() || 0;
+          const tB = new Date(b.measurementTimestamp).getTime() || 0;
+          return tB - tA;
+        });
 
         // Update active plot state from latest telemetry
         setPlots(prevPlots => prevPlots.map(plot => {
@@ -410,10 +439,14 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         return mergedList;
       });
-    });
+    };
+
+    const unsubSupabase = subscribeToSupabaseMultiTable(processIncomingTelemetry);
+    const unsubFirestore = subscribeToFirestoreTelemetry(processIncomingTelemetry);
 
     return () => {
-      unsubscribe();
+      unsubSupabase();
+      unsubFirestore();
     };
   }, []);
 
@@ -618,7 +651,7 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       timestamp: new Date().toISOString(),
       plot_id: plot.id,
       plot_code: plot.code,
-      action_type: type,
+      action_type: type === 'growLight' ? 'grow_light' : type,
       triggered_by: mode,
       details
     };

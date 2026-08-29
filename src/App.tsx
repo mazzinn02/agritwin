@@ -24,11 +24,11 @@ import MySensors from './pages/MySensors';
 import DeviceControl from './pages/DeviceControl';
 import Crops from './pages/farm-management/Crops';
 import FieldAuditLog from './pages/farm-management/FieldAuditLog';
+import MyFarms from './pages/MyFarms';
 
 import AddNewFarmlandPage from './pages/AddNewFarmlandPage';
 import ManualTelemetryPage from './pages/ManualTelemetryPage';
 import ResearchView from './pages/ResearchView';
-import FarmTelemetryExplorer from './pages/FarmTelemetryExplorer';
 
 import { AgriStoreProvider } from './context/AgriStore';
 
@@ -95,12 +95,12 @@ function App() {
             >
               {/* Shared Routes (Both Admin and Farmer/Worker) */}
               <Route index element={<Dashboard />} />
+              <Route path="my-farms" element={<MyFarms />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="vision" element={<CropVision />} />
               <Route path="control" element={<DeviceControl />} />
               <Route path="camera" element={<CameraFeed />} />
               <Route path="map" element={<MapView />} />
-              <Route path="telemetry-explorer" element={<FarmTelemetryExplorer />} />
 
               {/* Admin-Only Routes */}
               <Route path="add-farmland" element={<AdminRoute><AddNewFarmlandPage /></AdminRoute>} />

@@ -12,9 +12,10 @@ import {
 import { useAgriStore } from '../context/AgriStore';
 import { DataSourceBadge } from '../components/common/DataSourceBadge';
 import { PrototypeModeBanner } from '../components/common/PrototypeModeBanner';
+import { SensorProvenance } from '../components/common/SensorProvenance';
 
 export const AIAdvisor: React.FC = () => {
-  const { activeSections: plots, crops, triggerActuator, telemetryObservations } = useAgriStore();
+  const { activeSections: plots, crops, triggerActuator, telemetryObservations, activeFarmland } = useAgriStore();
   const [selectedPlotId, setSelectedPlotId] = useState<string>(plots[0]?.id || '');
   const [question, setQuestion] = useState('');
   const [doctorAnswer, setDoctorAnswer] = useState<string | null>(null);
@@ -137,6 +138,10 @@ export const AIAdvisor: React.FC = () => {
               <Info className="w-4 h-4 shrink-0" />
               <span>Analysis Source: <strong>{analysisSourceLabel}</strong></span>
             </div>
+
+            {latestObs && (
+              <SensorProvenance obs={latestObs} plots={plots} farmland={activeFarmland} layout="block" />
+            )}
 
             {latestObs ? (
               <div className="space-y-3 text-xs">

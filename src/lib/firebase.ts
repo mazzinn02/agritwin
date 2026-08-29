@@ -211,6 +211,50 @@ export async function saveSectionPlotRecord(plotData: any): Promise<void> {
 }
 
 // ----------------------------------------------------
+// Farm & Plot Firestore Persistence
+// Writes seed data so client can see: farms/, plots/, telemetry_observations/
+// in Firebase Console → Firestore Database
+// ----------------------------------------------------
+
+export async function saveFarmsToFirestore(farms: any[]): Promise<void> {
+  if (!farms || farms.length === 0) return;
+  try {
+    const batch = fsWriteBatch(firestoreDb);
+    farms.forEach(farm => {
+      const docRef = fsDoc(firestoreDb, 'farms', farm.id);
+      batch.set(docRef, {
+        ...farm,
+        _collection: 'farms',
+        _updatedAt: new Date().toISOString()
+      }, { merge: true });
+    });
+    await batch.commit();
+    console.log(`[Firestore:${FIRESTORE_DATABASE_ID}] ✅ Saved ${farms.length} farm(s) → collection: "farms"`);
+  } catch (err: any) {
+    console.warn(`[Firestore:${FIRESTORE_DATABASE_ID}] saveFarmsToFirestore:`, err?.message);
+  }
+}
+
+export async function savePlotsToFirestore(plots: any[]): Promise<void> {
+  if (!plots || plots.length === 0) return;
+  try {
+    const batch = fsWriteBatch(firestoreDb);
+    plots.forEach(plot => {
+      const docRef = fsDoc(firestoreDb, 'plots', plot.id);
+      batch.set(docRef, {
+        ...plot,
+        _collection: 'plots',
+        _updatedAt: new Date().toISOString()
+      }, { merge: true });
+    });
+    await batch.commit();
+    console.log(`[Firestore:${FIRESTORE_DATABASE_ID}] ✅ Saved ${plots.length} plot(s) → collection: "plots"`);
+  } catch (err: any) {
+    console.warn(`[Firestore:${FIRESTORE_DATABASE_ID}] savePlotsToFirestore:`, err?.message);
+  }
+}
+
+// ----------------------------------------------------
 // Real Firestore Telemetry Observations Persistence
 // Using Named Firestore Database: ai-studio-agritwincropdigi-372ea700-9482-4e27-9cbd-81501a2db50d
 // ----------------------------------------------------
@@ -283,8 +327,7 @@ export async function testFirestoreWrite(): Promise<void> {
   }
 }
 
-// Auto-run write diagnostic once on module load
-testFirestoreWrite();
+// testFirestoreWrite(); // Disabled on startup to prevent writing test docs without telemetry fields
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function subscribeToFirestoreTelemetry(
@@ -292,13 +335,16 @@ export function subscribeToFirestoreTelemetry(
 ): () => void {
   try {
     const colRef = fsCollection(firestoreDb, 'telemetry_observations');
-    const q = fsQuery(colRef, fsOrderBy('measurementTimestamp', 'desc'), fsLimit(500));
     
-    return fsOnSnapshot(q, (snapshot) => {
+    return fsOnSnapshot(colRef, (snapshot) => {
       const list: TelemetryObservation[] = [];
       snapshot.forEach(docSnap => {
-        list.push(docSnap.data() as TelemetryObservation);
+        const data = docSnap.data() as TelemetryObservation;
+        if (data && data.id && data.measurementTimestamp && data.parameterKey) {
+          list.push(data);
+        }
       });
+      list.sort((a, b) => new Date(b.measurementTimestamp).getTime() - new Date(a.measurementTimestamp).getTime());
       if (list.length > 0) {
         onUpdate(list);
       }

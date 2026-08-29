@@ -87,7 +87,16 @@ export interface AuditLogEntry {
   details: string;
 }
 
-export type DataSourceType = 'MANUAL_PROTOTYPE' | 'SENSOR' | 'AI_ML' | 'DERIVED' | 'SIMULATION';
+export interface UserProfile {
+  uid: string;
+  email: string;
+  full_name: string;
+  role: 'admin' | 'farmer';
+  assigned_farm_ids: string[];
+  created_at: string;
+}
+
+export type DataSourceType = 'MANUAL_PROTOTYPE' | 'SENSOR' | 'AI_ML' | 'DERIVED' | 'SIMULATION' | 'SIMULATED';
 
 export interface TelemetryObservation {
   id: string;
@@ -103,6 +112,7 @@ export interface TelemetryObservation {
   receivedTimestamp: string;
   qualityStatus: 'VALID' | 'WARNING' | 'INVALID';
   dataSource: DataSourceType;
+  notes?: string;
   metadata?: Record<string, any>;
 }
 

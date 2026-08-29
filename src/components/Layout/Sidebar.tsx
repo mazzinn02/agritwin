@@ -186,8 +186,12 @@ export const Sidebar: React.FC = () => {
           {farmOpen && (
             <div className="mt-1.5 space-y-1 pl-1">
               <NavLink
-                to="/"
-                className="flex items-center space-x-2.5 px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+                to="/my-farms"
+                className={({ isActive }) =>
+                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`
+                }
               >
                 <Building2 className="w-4 h-4 text-sky-400" />
                 <span>My Farms</span>
@@ -215,18 +219,6 @@ export const Sidebar: React.FC = () => {
               >
                 <Radio className="w-4 h-4 text-sky-400" />
                 <span>My Sensors</span>
-              </NavLink>
-
-              <NavLink
-                to="/telemetry-explorer"
-                className={({ isActive }) =>
-                  `flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all ${
-                    isActive ? 'bg-slate-800 text-teal-400 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                  }`
-                }
-              >
-                <TableProperties className="w-4 h-4 text-teal-400" />
-                <span>Telemetry Explorer</span>
               </NavLink>
             </div>
           )}

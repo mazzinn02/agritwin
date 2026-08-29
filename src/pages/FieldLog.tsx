@@ -14,10 +14,11 @@ import {
 import { useAgriStore } from '../context/AgriStore';
 import { DataSourceBadge } from '../components/common/DataSourceBadge';
 import { PrototypeModeBanner } from '../components/common/PrototypeModeBanner';
+import { SensorProvenance } from '../components/common/SensorProvenance';
 import { TelemetryObservation } from '../types';
 
 export const FieldLog: React.FC = () => {
-  const { telemetryObservations, activeSections, crops } = useAgriStore();
+  const { telemetryObservations, activeSections, activeFarmland, crops } = useAgriStore();
 
   // Filter States
   const [selectedPlot, setSelectedPlot] = useState<string>('ALL');
@@ -218,6 +219,7 @@ export const FieldLog: React.FC = () => {
                 <th className="px-4 py-3.5">Plot / Node</th>
                 <th className="px-4 py-3.5">Parameter</th>
                 <th className="px-4 py-3.5">Value & Unit</th>
+                <th className="px-4 py-3.5">Source Chain</th>
                 <th className="px-4 py-3.5">Data Source</th>
                 <th className="px-5 py-3.5 text-right">Status</th>
               </tr>
@@ -268,6 +270,10 @@ export const FieldLog: React.FC = () => {
 
                       <td className="px-4 py-3.5 font-mono font-black text-slate-900 text-sm">
                         {record.value} <span className="text-xs font-bold text-slate-500">{record.unit}</span>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <SensorProvenance obs={record} plots={activeSections} farmland={activeFarmland} />
                       </td>
 
                       <td className="px-4 py-3.5">

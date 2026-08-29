@@ -1,8 +1,13 @@
 import { PlotBed, Crop, TelemetryObservation } from '../types';
 import { getParameterDefinition } from '../lib/parameters';
 import { saveTelemetryBatchToFirestore } from '../lib/firebase';
+import { saveTelemetryBatchToSupabase } from '../lib/supabase';
 
-export const DEMO_TELEMETRY_INTERVAL_MS = 30000;
+// ─── SIMULATION INTERVAL ────────────────────────────────────────────────────
+// Data is generated every 12 seconds and written directly to:
+//   Firestore DB → collection: "telemetry_observations"
+// Each document has: farmId, plotId, sensorId, parameterKey, value, dataSource: "SIMULATED"
+export const DEMO_TELEMETRY_INTERVAL_MS = 12000;
 
 class TelemetrySimulatorService {
   private timerId: any = null;
@@ -12,6 +17,7 @@ class TelemetrySimulatorService {
   private plotParamState: Record<string, number> = {};
   private getPlotsFn: (() => PlotBed[]) | null = null;
   private getCropsFn: (() => Crop[]) | null = null;
+  private lastCycleTime: number | null = null;
 
   public getSessionId(): string {
     return this.simulationSessionId;
@@ -19,6 +25,10 @@ class TelemetrySimulatorService {
 
   public isSimulating(): boolean {
     return this.isRunning;
+  }
+
+  public getLastCycleTime(): number | null {
+    return this.lastCycleTime;
   }
 
   public getIntervalMs(): number {
@@ -88,6 +98,8 @@ class TelemetrySimulatorService {
     const generatedObs: TelemetryObservation[] = [];
     const nowIso = new Date().toISOString();
     const currentHour = new Date().getHours() + new Date().getMinutes() / 60;
+    this.lastCycleTime = Date.now();
+
 
     let eligibleCount = 0;
     let skippedNoFarm = 0;
@@ -251,19 +263,33 @@ class TelemetrySimulatorService {
     }
 
     console.log(
-      `TelemetrySimulator cycle: eligible=${eligibleCount}, ` +
-      `skipped(no farmId)=${skippedNoFarm}, ` +
-      `skipped(no sensor)=${skippedNoSensor}, ` +
-      `skipped(no crop/fallow)=${skippedNoCrop}, ` +
-      `observations generated=${generatedObs.length}`
+      `%c[🌱 TELEMETRY SIMULATOR] Cycle fired at ${new Date().toLocaleTimeString()}`,
+      'color: #10b981; font-weight: bold; font-size: 11px;'
+    );
+    console.log(
+      `  eligible plots: ${eligibleCount} | ` +
+      `skipped(no farmId): ${skippedNoFarm} | ` +
+      `skipped(no sensor): ${skippedNoSensor} | ` +
+      `skipped(fallow): ${skippedNoCrop} | ` +
+      `observations generated: ${generatedObs.length}`
+    );
+    console.log(
+      `  📦 Writing ${generatedObs.length} docs → Firestore collection: "telemetry_observations" [dataSource: SIMULATED]`
     );
 
     if (generatedObs.length === 0) return;
 
-    // Persist every generated observation directly to REAL FIREBASE FIRESTORE
+    // 1. Persist generated observations to Supabase PostgreSQL
+    try {
+      await saveTelemetryBatchToSupabase(generatedObs);
+    } catch (err: any) {
+      console.warn('TelemetrySimulator: Supabase write notice:', err?.message);
+    }
+
+    // 2. Persist to Firestore (fallback/secondary)
     try {
       await saveTelemetryBatchToFirestore(generatedObs);
-      console.log(`TelemetrySimulator: Persisted ${generatedObs.length} simulated observations to Firestore [telemetry_observations].`);
+      console.log(`TelemetrySimulator: Persisted ${generatedObs.length} simulated observations.`);
     } catch (err: any) {
       console.error('TelemetrySimulator: Firestore write failed:', err);
     }
