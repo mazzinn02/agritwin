@@ -1,5 +1,6 @@
--- Complete AgriTwin Supabase PostgreSQL DDL Schema
--- Execute in Supabase SQL Editor (https://app.supabase.com -> SQL Editor)
+-- Migration: 002_multi_farm_schema.sql
+-- Description: Multi-Farm Agricultural Digital Twin Schema for Supabase PostgreSQL
+-- Creates tables: farms, plots, sensors, telemetry_observations and enables Realtime
 
 -- 1. Farms Table
 CREATE TABLE IF NOT EXISTS public.farms (
@@ -18,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.farms (
 -- 2. Plots Table
 CREATE TABLE IF NOT EXISTS public.plots (
   id TEXT PRIMARY KEY,
-  farm_id TEXT,
+  farm_id TEXT REFERENCES public.farms(id) ON DELETE CASCADE,
   code TEXT NOT NULL,
   name TEXT NOT NULL,
   area NUMERIC DEFAULT 0,
@@ -37,8 +38,8 @@ CREATE TABLE IF NOT EXISTS public.plots (
 -- 3. Sensors Table
 CREATE TABLE IF NOT EXISTS public.sensors (
   id TEXT PRIMARY KEY,
-  farm_id TEXT,
-  plot_id TEXT,
+  farm_id TEXT REFERENCES public.farms(id) ON DELETE CASCADE,
+  plot_id TEXT REFERENCES public.plots(id) ON DELETE CASCADE,
   sensor_code TEXT NOT NULL,
   sensor_type TEXT NOT NULL,
   assigned_plot_code TEXT NOT NULL,
@@ -68,7 +69,16 @@ CREATE TABLE IF NOT EXISTS public.telemetry_observations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable Realtime
+-- Indexes for high-performance querying
+CREATE INDEX IF NOT EXISTS idx_plots_farm_id ON public.plots(farm_id);
+CREATE INDEX IF NOT EXISTS idx_sensors_farm_id ON public.sensors(farm_id);
+CREATE INDEX IF NOT EXISTS idx_sensors_plot_id ON public.sensors(plot_id);
+CREATE INDEX IF NOT EXISTS idx_telemetry_farm_id ON public.telemetry_observations(farm_id);
+CREATE INDEX IF NOT EXISTS idx_telemetry_plot_id ON public.telemetry_observations(plot_id);
+CREATE INDEX IF NOT EXISTS idx_telemetry_sensor_id ON public.telemetry_observations(sensor_id);
+CREATE INDEX IF NOT EXISTS idx_telemetry_ts ON public.telemetry_observations(measurement_timestamp DESC);
+
+-- Enable Supabase Realtime for all tables
 ALTER PUBLICATION supabase_realtime ADD TABLE public.farms;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.plots;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.sensors;

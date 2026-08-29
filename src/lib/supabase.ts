@@ -259,12 +259,14 @@ export async function savePlotsToSupabase(plots: any[]): Promise<void> {
       name: p.name,
       area: p.area,
       area_unit: p.areaUnit || 'acres',
-      crop_id: p.cropId || null,
+      crop_type: p.cropType || p.name,
+      growth_stage: p.growthStage || 'Vegetative',
       sensor_node_id: p.sensorNodeId,
+      irrigation_status: p.irrigationStatus || 'Scheduled',
+      soil_health_score: p.soilHealthScore || 88,
       soil_moisture: p.soilMoisture,
       air_temp: p.airTemp,
       soil_ph: p.soilPh,
-      days_planted: p.daysPlanted || 1,
     }));
     const { error } = await supabase.from('plots').upsert(rows);
     if (!error) {
@@ -274,5 +276,59 @@ export async function savePlotsToSupabase(plots: any[]): Promise<void> {
     }
   } catch (err: any) {
     console.warn('[SUPABASE PLOTS EXCEPTION]', err?.message);
+  }
+}
+
+// 6. Save Sensors to Supabase
+export async function saveSensorsToSupabase(sensors: any[]): Promise<void> {
+  if (!isSupabaseConfigured || !sensors || sensors.length === 0) return;
+  try {
+    const rows = sensors.map((s) => ({
+      id: s.id,
+      farm_id: s.farmId,
+      plot_id: s.plotId,
+      sensor_code: s.sensorCode || s.id,
+      sensor_type: s.type || 'Sensor',
+      assigned_plot_code: s.assignedPlotCode,
+      battery_pct: s.batteryPct,
+      status: s.status,
+      last_ping: s.lastPing,
+      current_reading: s.currentReading,
+    }));
+    const { error } = await supabase.from('sensors').upsert(rows);
+    if (!error) {
+      console.log(`[SUPABASE] Synced ${sensors.length} sensor(s) → public.sensors`);
+    }
+  } catch (err: any) {
+    console.warn('[SUPABASE SENSORS EXCEPTION]', err?.message);
+  }
+}
+
+// 7. Get All Table Counts for Verification Dashboard
+export async function getSupabaseTableCounts(): Promise<{
+  farmsCount: number;
+  plotsCount: number;
+  sensorsCount: number;
+  telemetryCount: number;
+}> {
+  if (!isSupabaseConfigured) {
+    return { farmsCount: 0, plotsCount: 0, sensorsCount: 0, telemetryCount: 0 };
+  }
+  try {
+    const [farmsRes, plotsRes, sensorsRes, telemetryRes] = await Promise.all([
+      supabase.from('farms').select('*', { count: 'exact', head: true }),
+      supabase.from('plots').select('*', { count: 'exact', head: true }),
+      supabase.from('sensors').select('*', { count: 'exact', head: true }),
+      supabase.from('telemetry_observations').select('*', { count: 'exact', head: true }),
+    ]);
+
+    return {
+      farmsCount: farmsRes.count || 0,
+      plotsCount: plotsRes.count || 0,
+      sensorsCount: sensorsRes.count || 0,
+      telemetryCount: telemetryRes.count || 0,
+    };
+  } catch (e) {
+    return { farmsCount: 0, plotsCount: 0, sensorsCount: 0, telemetryCount: 0 };
   }
 }

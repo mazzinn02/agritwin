@@ -25,6 +25,7 @@ import DeviceControl from './pages/DeviceControl';
 import Crops from './pages/farm-management/Crops';
 import FieldAuditLog from './pages/farm-management/FieldAuditLog';
 import MyFarms from './pages/MyFarms';
+import DatabaseMonitor from './pages/DatabaseMonitor';
 
 import AddNewFarmlandPage from './pages/AddNewFarmlandPage';
 import ManualTelemetryPage from './pages/ManualTelemetryPage';
@@ -96,6 +97,7 @@ function App() {
               {/* Shared Routes (Both Admin and Farmer/Worker) */}
               <Route index element={<Dashboard />} />
               <Route path="my-farms" element={<MyFarms />} />
+              <Route path="db-monitor" element={<DatabaseMonitor />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="vision" element={<CropVision />} />
               <Route path="control" element={<DeviceControl />} />

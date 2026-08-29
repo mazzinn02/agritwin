@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { Crop, Farmland, PlotBed, UserProfile, AuditLogEntry, TelemetryObservation } from '../types';
-import { saveFarmsToSupabase, savePlotsToSupabase, subscribeToSupabaseMultiTable, saveTelemetryObservationToSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { Crop, Farmland, PlotBed, UserProfile, AuditLogEntry, TelemetryObservation, IoTSensor } from '../types';
+import { saveFarmsToSupabase, savePlotsToSupabase, saveSensorsToSupabase, subscribeToSupabaseMultiTable, saveTelemetryObservationToSupabase, isSupabaseConfigured } from '../lib/supabase';
 import { telemetrySimulator } from '../services/telemetrySimulator';
+import { SEEDED_FARMS, SEEDED_PLOTS, SEEDED_SENSORS, generateSeededTelemetry, seedMultiFarmSystemToSupabase } from '../lib/multi-farm-seeder';
 
 export const STORE_KEYS = {
   CROPS: 'agritwin_crops',
   FARMLANDS: 'agritwin_farmlands',
   PLOTS: 'agritwin_plots',
+  SENSORS: 'agritwin_sensors',
   USERS: 'agritwin_users',
   AUDIT_LOGS: 'agritwin_audit_logs',
   TELEMETRY_OBSERVATIONS: 'agritwin_telemetry_observations',
@@ -285,6 +287,7 @@ interface AgriStoreContextType {
   crops: Crop[];
   farmlands: Farmland[];
   plots: PlotBed[];
+  sensors: IoTSensor[];
   users: UserProfile[];
   auditLogs: AuditLogEntry[];
   telemetryObservations: TelemetryObservation[];
@@ -295,6 +298,7 @@ interface AgriStoreContextType {
   isWorker: boolean;
   isDemoTelemetryActive: boolean;
   toggleDemoTelemetry: (enable: boolean) => void;
+  seedMultiFarmSystem: () => Promise<any>;
   setCurrentUser: (u: UserProfile | null) => void;
   selectFarmland: (farmId: string) => void;
   addFarmland: (farmData: Omit<Farmland, 'id' | 'createdAt'>, sectionsData: Array<Partial<PlotBed> & { code: string; name: string; area: number; cropId?: string | null }>) => void;
@@ -359,44 +363,59 @@ const migratePlotFarmIds = (plots: PlotBed[]): PlotBed[] => {
 
 export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [crops, setCrops] = useState<Crop[]>(() => loadInitialState(STORE_KEYS.CROPS, SEED_CROPS));
-  const [farmlands, setFarmlands] = useState<Farmland[]>(() => loadInitialState(STORE_KEYS.FARMLANDS, [SEED_FARMLAND]));
-  const [plots, setPlots] = useState<PlotBed[]>(() =>
-    migratePlotFarmIds(loadInitialState(STORE_KEYS.PLOTS, SEED_SECTIONS))
-  );
+  const [farmlands, setFarmlands] = useState<Farmland[]>(() => loadInitialState(STORE_KEYS.FARMLANDS, SEEDED_FARMS));
+  const [plots, setPlots] = useState<PlotBed[]>(() => loadInitialState(STORE_KEYS.PLOTS, SEEDED_PLOTS));
+  const [sensors, setSensors] = useState<IoTSensor[]>(() => loadInitialState(STORE_KEYS.SENSORS, SEEDED_SENSORS));
   const [users, setUsers] = useState<UserProfile[]>(() => loadInitialState(STORE_KEYS.USERS, SEED_USERS));
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => loadInitialState(STORE_KEYS.AUDIT_LOGS, SEED_AUDIT_LOGS));
-  const [telemetryObservations, setTelemetryObservations] = useState<TelemetryObservation[]>(() => loadInitialState(STORE_KEYS.TELEMETRY_OBSERVATIONS, SEED_TELEMETRY_OBSERVATIONS));
+  const [telemetryObservations, setTelemetryObservations] = useState<TelemetryObservation[]>(() => loadInitialState(STORE_KEYS.TELEMETRY_OBSERVATIONS, generateSeededTelemetry()));
 
   const [activeFarmId, setActiveFarmId] = useState<string>(() => {
-    if (typeof window === 'undefined') return SEED_FARMLAND.id;
-    return localStorage.getItem(STORE_KEYS.ACTIVE_FARM_ID) || SEED_FARMLAND.id;
+    if (typeof window === 'undefined') return SEEDED_FARMS[0].id;
+    return localStorage.getItem(STORE_KEYS.ACTIVE_FARM_ID) || SEEDED_FARMS[0].id;
   });
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     return loadInitialState(STORE_KEYS.CURRENT_USER, SEED_USERS[0]);
   });
 
-  // Auto-start simulator on mount for client demo — sensor data flows immediately
   const [isDemoTelemetryActive, setIsDemoTelemetryActive] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const stored = localStorage.getItem(STORE_KEYS.DEMO_TELEMETRY_ACTIVE);
-    // Default to TRUE so dummy data flows automatically for client demo
     return stored === null ? true : stored === 'true';
   });
 
-  // 0. Seed farms and plots to Supabase on mount
+  // Automated Demo Data Seeder function
+  const seedMultiFarmSystem = async () => {
+    const res = await seedMultiFarmSystemToSupabase();
+    setFarmlands(SEEDED_FARMS);
+    setPlots(SEEDED_PLOTS);
+    setSensors(SEEDED_SENSORS);
+    setTelemetryObservations(generateSeededTelemetry());
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORE_KEYS.FARMLANDS, JSON.stringify(SEEDED_FARMS));
+      localStorage.setItem(STORE_KEYS.PLOTS, JSON.stringify(SEEDED_PLOTS));
+      localStorage.setItem(STORE_KEYS.SENSORS, JSON.stringify(SEEDED_SENSORS));
+      localStorage.setItem(STORE_KEYS.TELEMETRY_OBSERVATIONS, JSON.stringify(generateSeededTelemetry()));
+    }
+    return res;
+  };
+
+  // 0. Seed farms, plots, and sensors to Supabase on mount
   useEffect(() => {
     saveFarmsToSupabase(farmlands);
     savePlotsToSupabase(plots);
+    saveSensorsToSupabase(sensors);
 
     if (typeof window !== 'undefined') {
       (window as any).__agriSimulator = telemetrySimulator;
       console.log(
-        '%c[AgriTwin Database Engine] Active',
+        '%c[AgriTwin Multi-Farm Engine] Active',
         'color: #3ecf8e; font-weight: bold; font-size: 12px;'
       );
       console.log(`  🟢 Supabase Status: ${isSupabaseConfigured ? 'CONNECTED' : 'STANDBY'}`);
-      console.log('  📂 public.farms / public.plots / public.telemetry_observations');
+      console.log('  📂 public.farms (5) | public.plots (25) | public.sensors (150) | public.telemetry_observations (1000+)');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -755,6 +774,7 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         crops,
         farmlands,
         plots,
+        sensors,
         users,
         auditLogs,
         telemetryObservations,
@@ -765,6 +785,7 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isWorker,
         isDemoTelemetryActive,
         toggleDemoTelemetry,
+        seedMultiFarmSystem,
         setCurrentUser,
         selectFarmland,
         addFarmland,

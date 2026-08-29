@@ -69,7 +69,7 @@ export const Sidebar: React.FC = () => {
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-4 text-xs font-medium">
         
         {/* 1. PRIMARY */}
-        <div>
+        <div className="space-y-1">
           <NavLink
             to="/"
             end
@@ -83,6 +83,34 @@ export const Sidebar: React.FC = () => {
           >
             <LayoutDashboard className="w-4 h-4 text-emerald-400" />
             <span className="text-sm">Dashboard</span>
+          </NavLink>
+
+          <NavLink
+            to="/my-farms"
+            className={({ isActive }) =>
+              `flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all duration-150 font-bold ${
+                isActive
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`
+            }
+          >
+            <Building2 className="w-4 h-4 text-teal-400" />
+            <span className="text-sm">My Farms</span>
+          </NavLink>
+
+          <NavLink
+            to="/db-monitor"
+            className={({ isActive }) =>
+              `flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all duration-150 font-bold ${
+                isActive
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`
+            }
+          >
+            <Database className="w-4 h-4 text-purple-400" />
+            <span className="text-sm">DB & Realtime</span>
           </NavLink>
         </div>
 

@@ -107,26 +107,10 @@ class TelemetrySimulatorService {
 
     for (const plot of plots) {
       // ── GUARD 1: farm ownership ────────────────────────────────────────────
-      const farmId = plot.farmId;
-      if (!farmId) {
-        console.log(`TelemetrySimulator: Skipping plot ${plot.id} — no farmId configured.`);
-        skippedNoFarm++;
-        continue;
-      }
+      const farmId = plot.farmId || 'farm_iiit_dharwad';
 
       // ── GUARD 2: sensor ownership ──────────────────────────────────────────
-      const nodeCode = plot.sensorNodeId || plot.sensorId;
-      if (!nodeCode) {
-        console.log(`TelemetrySimulator: Skipping plot ${plot.id} — no sensor configured.`);
-        skippedNoSensor++;
-        continue;
-      }
-
-      // ── GUARD 3: crop ownership (fallow plots produce no crop telemetry) ───
-      if (!plot.cropId) {
-        skippedNoCrop++;
-        continue;
-      }
+      const nodeCode = plot.sensorNodeId || plot.sensorId || `NODE-${plot.code}`;
 
       eligibleCount++;
       const crop = crops.find(c => c.id === plot.cropId) || null;

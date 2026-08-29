@@ -41,6 +41,9 @@ export interface Farmland {
   totalArea: number;
   unit: string;
   sectionsCount: number;
+  sensorsCount?: number;
+  healthScore?: number;
+  lastUpdate?: string;
   createdAt: string;
 }
 
@@ -52,6 +55,8 @@ export interface PlotBed {
   areaUnit: string;
   areaSqm?: number;
   cropId: string | null;
+  cropType?: string;
+  growthStage?: 'Germination' | 'Vegetative' | 'Flowering' | 'Fruiting' | 'Maturation' | 'Harvesting';
   sensorNodeId: string;
   sensorId?: string; // alias for sensorNodeId
   boundaryCoordinates?: [number, number][];
@@ -62,12 +67,17 @@ export interface PlotBed {
   daysPlanted: number;
   isWatering?: boolean;
   hvacActive?: boolean;
+  irrigationStatus?: 'Active Drip' | 'Automated Sprinkler' | 'Scheduled' | 'Idle';
+  soilHealthScore?: number;
   createdAt?: string;
   farmId?: string; // set by farm-creation flow; required for telemetry ownership
 }
 
 export interface IoTSensor {
   id: string;
+  farmId?: string;
+  plotId?: string;
+  sensorCode?: string;
   nodeName: string;
   assignedPlotCode: string;
   type?: string;
@@ -75,6 +85,7 @@ export interface IoTSensor {
   batteryPct: number;
   status: 'Online' | 'Offline';
   lastPing: string;
+  currentReading?: string;
 }
 
 export interface AuditLogEntry {
