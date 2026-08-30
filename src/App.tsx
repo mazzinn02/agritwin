@@ -13,6 +13,9 @@ import UserManagement from './pages/UserManagement';
 import Dashboard from './pages/Dashboard';
 import CropComparison from './pages/CropComparison';
 import CropHealthAdvisor from './pages/CropHealthAdvisor';
+import CropVision from './pages/CropVision';
+import AIAdvisor from './pages/AIAdvisor';
+import VirtualFarm from './pages/VirtualFarm';
 import FieldLog from './pages/FieldLog';
 import Analytics from './pages/Analytics';
 import WhatIfSimulator from './pages/WhatIfSimulator';
@@ -90,13 +93,13 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              {/* Tier 1 & Shared Routes */}
+              {/* Tier 1 & Operational Routes */}
               <Route index element={<Dashboard />} />
               <Route path="my-farms" element={<MyFarms />} />
-              <Route path="crop-health" element={<CropHealthAdvisor />} />
+              <Route path="crop-health" element={<CropVision />} />
+              <Route path="virtual-farm" element={<VirtualFarm />} />
+              <Route path="advisor" element={<AIAdvisor />} />
               <Route path="vision" element={<CropHealthAdvisor />} />
-              <Route path="advisor" element={<CropHealthAdvisor />} />
-              <Route path="virtual-farm" element={<CropHealthAdvisor />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="history" element={<FieldLog />} />
               <Route path="control" element={<DeviceControl />} />

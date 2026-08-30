@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Radio,
   Thermometer,
@@ -12,7 +12,9 @@ import {
   AlertCircle,
   Sprout,
   Zap,
-  Activity
+  Activity,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { useAgriStore } from '../context/AgriStore';
 import { PrototypeModeBanner } from '../components/common/PrototypeModeBanner';
@@ -42,6 +44,13 @@ function getSensorIcon(typeStr: string) {
 
 export const MySensors: React.FC = () => {
   const { activeSections: plots, activeFarmland, crops, sensors, isDemoTelemetryActive } = useAgriStore();
+
+  // Progressive Disclosure: Collapsed by default for clean information density
+  const [expandedPlots, setExpandedPlots] = useState<Record<string, boolean>>({});
+
+  const togglePlotExpand = (plotId: string) => {
+    setExpandedPlots(prev => ({ ...prev, [plotId]: !prev[plotId] }));
+  };
 
   const hierarchy = useMemo(() => {
     return plots.map(plot => {
@@ -106,78 +115,108 @@ export const MySensors: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {hierarchy.map(({ plot, crop, plotSensors, lastUpdated }) => {
+            const isExpanded = Boolean(expandedPlots[plot.id]);
+
             return (
               <div
                 key={plot.id}
-                className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden flex flex-col"
+                className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden flex flex-col transition-all"
               >
-                {/* Header: Dark banner with Plot Code + Crop */}
-                <div className="bg-gradient-to-r from-slate-900 to-indigo-950 px-5 py-4">
-                  <div className="flex items-center space-x-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1">
-                    <Building2 className="w-3 h-3" />
-                    <span>{activeFarmland?.name || 'Farm'}</span>
-                    <span className="text-slate-600 mx-0.5">›</span>
-                    <span className="text-emerald-300 font-bold">{plot.code}</span>
-                  </div>
+                {/* Header: Dark banner with Plot Code + Crop + Toggle Button */}
+                <div 
+                  onClick={() => togglePlotExpand(plot.id)}
+                  className="bg-gradient-to-r from-slate-900 to-indigo-950 px-5 py-4 cursor-pointer select-none flex items-center justify-between hover:from-slate-800 hover:to-indigo-900 transition-colors"
+                >
+                  <div>
+                    <div className="flex items-center space-x-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1">
+                      <Building2 className="w-3 h-3" />
+                      <span>{activeFarmland?.name || 'Farm'}</span>
+                      <span className="text-slate-600 mx-0.5">›</span>
+                      <span className="text-emerald-300 font-bold">{plot.code}</span>
+                    </div>
 
-                  <h2 className="text-base font-black text-white leading-tight">
-                    {plot.name}
-                  </h2>
+                    <h2 className="text-base font-black text-white leading-tight">
+                      {plot.name}
+                    </h2>
 
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center space-x-1.5">
-                      <Sprout className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-xs text-emerald-300 font-bold">
-                        {plot.cropType || crop?.name || 'Crop'}
+                    <div className="flex items-center space-x-3 mt-2">
+                      <div className="flex items-center space-x-1.5">
+                        <Sprout className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-xs text-emerald-300 font-bold">
+                          {plot.cropType || crop?.name || 'Crop'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700">
+                        {plotSensors.length} Sensors Active
                       </span>
                     </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700">
-                      {plotSensors.length} Sensors Active
-                    </span>
                   </div>
+
+                  <button className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-all flex items-center space-x-1 text-xs font-bold shrink-0">
+                    <span>{isExpanded ? 'Collapse' : 'Expand'}</span>
+                    {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  </button>
                 </div>
 
-                {/* Sensors Table — direct reading from public.sensors */}
-                <div className="px-5 py-4 space-y-2 flex-1">
-                  <div className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider mb-2 flex items-center justify-between">
-                    <span>Active Sensor Readings</span>
-                    <span className="text-[9px] font-mono text-emerald-700">Synced to public.sensors</span>
-                  </div>
-
-                  {plotSensors.length === 0 ? (
-                    <div className="text-xs text-slate-400 py-4 text-center">No sensors linked to this plot.</div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {plotSensors.map(sensor => (
-                        <div
-                          key={sensor.id}
-                          className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/60 transition-colors"
-                        >
-                          <div className="flex items-center space-x-2.5">
-                            {getSensorIcon(sensor.type || sensor.nodeName)}
-                            <div>
-                              <div className="text-xs font-black text-slate-900">
-                                {sensor.type || sensor.nodeName}
-                              </div>
-                              <div className="text-[9px] font-mono text-slate-400">
-                                ID: {sensor.id} · {sensor.sensorCode}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="text-right">
-                            <div className="text-xs font-black font-mono text-emerald-600">
-                              {sensor.currentReading || 'Updating...'}
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-mono">
-                              Ping: {fmtTimestamp(sensor.lastPing)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                {/* Collapsed Preview Summary */}
+                {!isExpanded && (
+                  <div className="px-5 py-3.5 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+                    <div className="flex items-center space-x-2">
+                      <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
+                      <span><strong>{plotSensors.length} Nodes Online</strong> (Moisture, Temp, pH, N-P-K)</span>
                     </div>
-                  )}
-                </div>
+                    <button 
+                      onClick={() => togglePlotExpand(plot.id)}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      View Live Telemetry →
+                    </button>
+                  </div>
+                )}
+
+                {/* Sensors Table — Expanded view */}
+                {isExpanded && (
+                  <div className="px-5 py-4 space-y-2 flex-1 animate-fadeIn">
+                    <div className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider mb-2 flex items-center justify-between">
+                      <span>Active Sensor Readings</span>
+                      <span className="text-[9px] font-mono text-emerald-700">Synced to public.sensors</span>
+                    </div>
+
+                    {plotSensors.length === 0 ? (
+                      <div className="text-xs text-slate-400 py-4 text-center">No sensors linked to this plot.</div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {plotSensors.map(sensor => (
+                          <div
+                            key={sensor.id}
+                            className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/60 transition-colors"
+                          >
+                            <div className="flex items-center space-x-2.5">
+                              {getSensorIcon(sensor.type || sensor.nodeName)}
+                              <div>
+                                <div className="text-xs font-black text-slate-900">
+                                  {sensor.type || sensor.nodeName}
+                                </div>
+                                <div className="text-[9px] font-mono text-slate-400">
+                                  ID: {sensor.id} · {sensor.sensorCode}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <div className="text-xs font-black font-mono text-emerald-600">
+                                {sensor.currentReading || 'Updating...'}
+                              </div>
+                              <div className="text-[9px] text-slate-400 font-mono">
+                                Ping: {fmtTimestamp(sensor.lastPing)}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Footer */}
                 <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/60 text-[10px]">

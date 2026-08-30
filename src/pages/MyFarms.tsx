@@ -82,7 +82,7 @@ export const MyFarms: React.FC = () => {
     triggerTelemetrySimulationNow
   } = useAgriStore();
 
-  const [expandedFarm, setExpandedFarm] = useState<string | null>('farm_iiit_dharwad');
+  const [expandedFarm, setExpandedFarm] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [simulating, setSimulating] = useState(false);
 
