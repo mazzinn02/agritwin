@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Crop, Farmland, PlotBed, UserProfile, AuditLogEntry, TelemetryObservation, IoTSensor } from '../types';
 import { saveFarmsToSupabase, savePlotsToSupabase, saveSensorsToSupabase, subscribeToSupabaseMultiTable, saveTelemetryObservationToSupabase, isSupabaseConfigured } from '../lib/supabase';
 import { telemetrySimulator } from '../services/telemetrySimulator';
@@ -465,13 +465,23 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
-  // 2. Control Telemetry Simulator Lifecycle based on isDemoTelemetryActive state
+  // ── Stable refs so simulator getters always see latest state WITHOUT
+  //    putting mutable arrays in the effect dependency array (which caused
+  //    the simulator to restart on every sensor update — the browser-freeze bug).
+  const plotsRef = useRef(plots);
+  const cropsRef = useRef(crops);
+  const sensorsRef = useRef(sensors);
+  useEffect(() => { plotsRef.current = plots; }, [plots]);
+  useEffect(() => { cropsRef.current = crops; }, [crops]);
+  useEffect(() => { sensorsRef.current = sensors; }, [sensors]);
+
+  // 2. Control Telemetry Simulator Lifecycle — only depends on the boolean flag
   useEffect(() => {
     if (isDemoTelemetryActive) {
       telemetrySimulator.start(
-        () => plots,
-        () => crops,
-        () => sensors,
+        () => plotsRef.current,
+        () => cropsRef.current,
+        () => sensorsRef.current,
         (_obs, updatedSensors) => {
           if (updatedSensors && updatedSensors.length > 0) {
             setSensors(prev => {
@@ -486,7 +496,9 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } else {
       telemetrySimulator.stop();
     }
-  }, [isDemoTelemetryActive, plots, crops, sensors]);
+    // Only re-run when the on/off toggle changes, NOT when data arrays change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDemoTelemetryActive]);
 
   const toggleDemoTelemetry = (enable: boolean) => {
     setIsDemoTelemetryActive(enable);
