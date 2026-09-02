@@ -1,8 +1,21 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Crop, Farmland, PlotBed, UserProfile, AuditLogEntry, TelemetryObservation, IoTSensor } from '../types';
-import { saveFarmsToSupabase, savePlotsToSupabase, saveSensorsToSupabase, subscribeToSupabaseMultiTable, saveTelemetryObservationToSupabase, isSupabaseConfigured } from '../lib/supabase';
+﻿import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Crop, Farmland, PlotBed, UserProfile, AuditLogEntry, TelemetryObservation, IoTSensor, FieldActivity, FarmAlert } from '../types';
+import {
+  saveFarmsToSupabase,
+  savePlotsToSupabase,
+  saveSensorsToSupabase,
+  deleteFarmFromSupabase,
+  deletePlotFromSupabase,
+  saveActivityToSupabase,
+  saveAlertToSupabase,
+  subscribeToSupabaseMultiTable,
+  saveTelemetryObservationToSupabase,
+  isSupabaseConfigured
+} from '../lib/supabase';
 import { telemetrySimulator } from '../services/telemetrySimulator';
 import { SEEDED_FARMS, SEEDED_PLOTS, SEEDED_SENSORS, generateSeededTelemetry, seedMultiFarmSystemToSupabase } from '../lib/multi-farm-seeder';
+import { ActivityLogger, setActivityCallback, seedActivityLog } from '../lib/activity-logger';
+import { evaluatePlotAlerts, evaluateSensorAlerts } from '../lib/alert-engine';
 
 export const STORE_KEYS = {
   CROPS: 'agritwin_crops',
@@ -12,12 +25,13 @@ export const STORE_KEYS = {
   USERS: 'agritwin_users',
   AUDIT_LOGS: 'agritwin_audit_logs',
   TELEMETRY_OBSERVATIONS: 'agritwin_telemetry_observations',
+  FIELD_ACTIVITIES: 'agritwin_field_activities',
+  ALERTS: 'agritwin_alerts',
   ACTIVE_FARM_ID: 'agritwin_active_farm_id',
   CURRENT_USER: 'agritwin_current_user_profile',
   DEMO_TELEMETRY_ACTIVE: 'agritwin_demo_telemetry_active'
 } as const;
 
-// 1. Seed Crop Cultivars
 export const SEED_CROPS: Crop[] = [
   {
     id: 'crop_tomato_sarpan',
@@ -96,101 +110,6 @@ export const SEED_CROPS: Crop[] = [
   }
 ];
 
-// 2. Seed Farmlands & Subdivisions (IIIT Dharwad 20 Acres)
-export const SEED_FARMLAND: Farmland = {
-  id: 'farm_iiit_dharwad',
-  name: 'iiit dharwad',
-  location: 'Dharwad, Karnataka',
-  totalArea: 20,
-  unit: 'acres',
-  sectionsCount: 4,
-  createdAt: new Date().toISOString()
-};
-
-export const SEED_SECTIONS: PlotBed[] = [
-  {
-    id: 'sec_a_tomato',
-    code: 'SEC-A',
-    name: 'Section A - Tomato (Sarpan F1)',
-    area: 5,
-    areaUnit: 'acres',
-    areaSqm: 20234.3,
-    cropId: 'crop_tomato_sarpan',
-    farmId: 'farm_iiit_dharwad',
-    sensorNodeId: 'NODE-01',
-    sensorId: 'NODE-01',
-    soilMoisture: 66.9,
-    airTemp: 24.2,
-    soilPh: 6.5,
-    parLux: 850,
-    daysPlanted: 45,
-    isWatering: false,
-    hvacActive: false,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'sec_b_chilli',
-    code: 'SEC-B',
-    name: 'Section B - Chilli (Byadgi Dabbi)',
-    area: 5,
-    areaUnit: 'acres',
-    areaSqm: 20234.3,
-    cropId: 'crop_chilli_byadgi',
-    farmId: 'farm_iiit_dharwad',
-    sensorNodeId: 'NODE-02',
-    sensorId: 'NODE-02',
-    soilMoisture: 54.2,
-    airTemp: 26.5,
-    soilPh: 6.8,
-    parLux: 920,
-    daysPlanted: 60,
-    isWatering: false,
-    hvacActive: false,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'sec_c_cotton',
-    code: 'SEC-C',
-    name: 'Section C - Bt-Cotton (RCH-2)',
-    area: 5,
-    areaUnit: 'acres',
-    areaSqm: 20234.3,
-    cropId: 'crop_cotton_rch',
-    farmId: 'farm_iiit_dharwad',
-    sensorNodeId: 'NODE-03',
-    sensorId: 'NODE-03',
-    soilMoisture: 48.0,
-    airTemp: 28.1,
-    soilPh: 7.0,
-    parLux: 750,
-    daysPlanted: 75,
-    isWatering: false,
-    hvacActive: false,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'sec_d_corn',
-    code: 'SEC-D',
-    name: 'Section D - Sweet Corn (Sugar-75)',
-    area: 5,
-    areaUnit: 'acres',
-    areaSqm: 20234.3,
-    cropId: 'crop_corn_sugar',
-    farmId: 'farm_iiit_dharwad',
-    sensorNodeId: 'NODE-04',
-    sensorId: 'NODE-04',
-    soilMoisture: 62.5,
-    airTemp: 23.8,
-    soilPh: 6.2,
-    parLux: 650,
-    daysPlanted: 30,
-    isWatering: false,
-    hvacActive: false,
-    createdAt: new Date().toISOString()
-  }
-];
-
-// 3. Seed User Accounts
 export const SEED_USERS: UserProfile[] = [
   {
     uid: 'usr_admin_001',
@@ -203,7 +122,7 @@ export const SEED_USERS: UserProfile[] = [
   {
     uid: 'usr_farmer_002',
     email: 'farmer@agritwin.com',
-    full_name: 'irappa',
+    full_name: 'Irappa Patil',
     role: 'farmer',
     assigned_farm_ids: ['farm_iiit_dharwad'],
     created_at: new Date().toISOString()
@@ -218,7 +137,7 @@ export const SEED_AUDIT_LOGS: AuditLogEntry[] = [
     plot_code: 'SEC-A',
     action_type: 'irrigation',
     triggered_by: 'manual',
-    details: 'System Administrator executed 15-min precision pulse on SEC-A (Tomato). Soil moisture set to 66.9%.'
+    details: 'Precision drip cycle executed on SEC-A (Tomato). Moisture increased to 66.9%.'
   },
   {
     id: 'audit_02',
@@ -227,59 +146,59 @@ export const SEED_AUDIT_LOGS: AuditLogEntry[] = [
     plot_code: 'SEC-B',
     action_type: 'hvac',
     triggered_by: 'manual',
-    details: 'irappa activated Canopy Ventilation Fan on SEC-B (Chilli).'
+    details: 'Canopy ventilation fan activated on SEC-B (Chilli).'
   }
 ];
 
-// 4. Seed Telemetry Observations
-export const SEED_TELEMETRY_OBSERVATIONS: TelemetryObservation[] = [
+const SEED_ACTIVITIES: FieldActivity[] = [
   {
-    id: 'obs_seed_01',
+    id: 'act_init_1',
+    timestamp: new Date(Date.now() - 15 * 60000).toISOString(),
     farmId: 'farm_iiit_dharwad',
-    plotId: 'sec_a_tomato',
-    deviceId: 'NODE-01',
-    sensorId: 'NODE-01',
-    parameterKey: 'soil_moisture',
-    displayName: 'Soil Volumetric Water Content',
-    value: 66.9,
-    unit: '%',
-    measurementTimestamp: new Date(Date.now() - 1800000).toISOString(),
-    receivedTimestamp: new Date(Date.now() - 1800000).toISOString(),
-    qualityStatus: 'VALID',
-    dataSource: 'MANUAL_PROTOTYPE',
-    metadata: { operator: 'System Administrator', notes: 'Initial baseline calibration observation' }
+    plotId: 'plot_dharwad_01',
+    eventType: 'farm_created',
+    title: 'IIIT Dharwad Smart Farm Online',
+    description: 'Central campus testbed connected to AgriTwin cloud telemetry.',
+    severity: 'success',
+    createdBy: 'System Administrator'
   },
   {
-    id: 'obs_seed_02',
+    id: 'act_init_2',
+    timestamp: new Date(Date.now() - 10 * 60000).toISOString(),
     farmId: 'farm_iiit_dharwad',
-    plotId: 'sec_a_tomato',
-    deviceId: 'NODE-01',
-    sensorId: 'NODE-01',
-    parameterKey: 'air_temperature',
-    displayName: 'Ambient Air Temperature',
-    value: 24.2,
-    unit: '°C',
-    measurementTimestamp: new Date(Date.now() - 1800000).toISOString(),
-    receivedTimestamp: new Date(Date.now() - 1800000).toISOString(),
-    qualityStatus: 'VALID',
-    dataSource: 'MANUAL_PROTOTYPE',
-    metadata: { operator: 'System Administrator' }
+    plotId: 'plot_dharwad_01',
+    eventType: 'sensor_online',
+    title: 'Sensor Unit Node 01 Connected',
+    description: 'Multi-parameter soil probe is transmitting data every 10s.',
+    severity: 'success',
   },
   {
-    id: 'obs_seed_03',
+    id: 'act_init_3',
+    timestamp: new Date(Date.now() - 5 * 60000).toISOString(),
     farmId: 'farm_iiit_dharwad',
-    plotId: 'sec_b_chilli',
-    deviceId: 'NODE-02',
-    sensorId: 'NODE-02',
+    plotId: 'plot_dharwad_02',
+    eventType: 'irrigation_triggered',
+    title: 'Automated Drip Cycle Complete',
+    description: '15-minute moisture recovery cycle completed on Section B.',
+    severity: 'info',
+    createdBy: 'Automated Rule Engine'
+  }
+];
+
+const SEED_INITIAL_ALERTS: FarmAlert[] = [
+  {
+    id: 'alert_init_1',
+    farmId: 'farm_iiit_dharwad',
+    plotId: 'plot_dharwad_03',
+    alertType: 'low_soil_moisture',
+    title: '⚠️ Low Soil Moisture — Section C (Cotton)',
+    message: 'Soil moisture dropped to 31.5% in Section C. Drip pulse recommended.',
+    severity: 'warning',
+    status: 'active',
     parameterKey: 'soil_moisture',
-    displayName: 'Soil Volumetric Water Content',
-    value: 54.2,
-    unit: '%',
-    measurementTimestamp: new Date(Date.now() - 3600000).toISOString(),
-    receivedTimestamp: new Date(Date.now() - 3600000).toISOString(),
-    qualityStatus: 'VALID',
-    dataSource: 'MANUAL_PROTOTYPE',
-    metadata: { operator: 'irappa' }
+    value: 31.5,
+    threshold: 35,
+    createdAt: new Date(Date.now() - 20 * 60000).toISOString()
   }
 ];
 
@@ -290,6 +209,8 @@ interface AgriStoreContextType {
   sensors: IoTSensor[];
   users: UserProfile[];
   auditLogs: AuditLogEntry[];
+  fieldActivities: FieldActivity[];
+  alerts: FarmAlert[];
   telemetryObservations: TelemetryObservation[];
   activeFarmland: Farmland | null;
   activeSections: PlotBed[];
@@ -302,15 +223,24 @@ interface AgriStoreContextType {
   seedMultiFarmSystem: () => Promise<any>;
   setCurrentUser: (u: UserProfile | null) => void;
   selectFarmland: (farmId: string) => void;
-  addFarmland: (farmData: Omit<Farmland, 'id' | 'createdAt'>, sectionsData: Array<Partial<PlotBed> & { code: string; name: string; area: number; cropId?: string | null }>) => void;
+  addFarmland: (farmData: Omit<Farmland, 'id' | 'createdAt'>, sectionsData?: Array<Partial<PlotBed> & { code: string; name: string; area: number; cropId?: string | null }>) => Farmland;
+  updateFarmland: (farmData: Farmland) => void;
+  deleteFarmland: (farmId: string) => void;
+  addPlot: (plotData: Omit<PlotBed, 'id' | 'createdAt'>) => PlotBed;
+  updatePlot: (plotData: PlotBed) => void;
+  deletePlot: (plotId: string) => void;
   addCrop: (cropData: Omit<Crop, 'id'>) => Crop;
   updateCrop: (cropData: Crop) => void;
   deleteCrop: (cropId: string) => void;
   assignCropToSection: (sectionId: string, cropId: string | null) => void;
   triggerActuator: (sectionId: string, type: 'irrigation' | 'hvac' | 'growLight', mode?: 'manual' | 'auto') => Promise<void>;
   addTelemetryObservation: (obsData: Omit<TelemetryObservation, 'id' | 'receivedTimestamp'>) => TelemetryObservation;
+  addAlert: (alertData: Omit<FarmAlert, 'id' | 'createdAt'>) => FarmAlert;
+  resolveAlert: (alertId: string, resolvedBy?: string) => void;
+  dismissAlert: (alertId: string) => void;
+  addFieldActivity: (activity: Omit<FieldActivity, 'id' | 'timestamp'>) => FieldActivity;
   addUser: (userData: Omit<UserProfile, 'uid' | 'created_at'>) => UserProfile;
-  updateUserRole: (uid: string, role: 'admin' | 'farmer') => void;
+  updateUserRole: (uid: string, role: any) => void;
   deleteUser: (uid: string) => void;
   exportFarmlandCsv: () => void;
 }
@@ -332,36 +262,6 @@ const loadInitialState = <T,>(key: string, seed: T): T => {
   }
 };
 
-// ── One-time migration: stamp farmId onto any stored plots that are missing it.
-// Maps known seed plot IDs → their owning farm ID so existing localStorage
-// data gets repaired without deleting any user-created plots.
-const SEED_PLOT_FARM_MAP: Record<string, string> = {
-  sec_a_tomato: 'farm_iiit_dharwad',
-  sec_b_chilli: 'farm_iiit_dharwad',
-  sec_c_cotton: 'farm_iiit_dharwad',
-  sec_d_corn:   'farm_iiit_dharwad',
-};
-
-const migratePlotFarmIds = (plots: PlotBed[]): PlotBed[] => {
-  if (!Array.isArray(plots)) return SEED_SECTIONS;
-  let patched = false;
-  const result = plots.map(p => {
-    if (!p) return p;
-    if (!p.farmId && SEED_PLOT_FARM_MAP[p.id]) {
-      patched = true;
-      return { ...p, farmId: SEED_PLOT_FARM_MAP[p.id] };
-    }
-    return p;
-  });
-  if (patched) {
-    console.log('[FARM RELATIONSHIP] Migrated stored plots — stamped missing farmId values.');
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORE_KEYS.PLOTS, JSON.stringify(result));
-    }
-  }
-  return result;
-};
-
 export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [crops, setCrops] = useState<Crop[]>(() => loadInitialState(STORE_KEYS.CROPS, SEED_CROPS));
   const [farmlands, setFarmlands] = useState<Farmland[]>(() => loadInitialState(STORE_KEYS.FARMLANDS, SEEDED_FARMS));
@@ -369,6 +269,8 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [sensors, setSensors] = useState<IoTSensor[]>(() => loadInitialState(STORE_KEYS.SENSORS, SEEDED_SENSORS));
   const [users, setUsers] = useState<UserProfile[]>(() => loadInitialState(STORE_KEYS.USERS, SEED_USERS));
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => loadInitialState(STORE_KEYS.AUDIT_LOGS, SEED_AUDIT_LOGS));
+  const [fieldActivities, setFieldActivities] = useState<FieldActivity[]>(() => loadInitialState(STORE_KEYS.FIELD_ACTIVITIES, SEED_ACTIVITIES));
+  const [alerts, setAlerts] = useState<FarmAlert[]>(() => loadInitialState(STORE_KEYS.ALERTS, SEED_INITIAL_ALERTS));
   const [telemetryObservations, setTelemetryObservations] = useState<TelemetryObservation[]>(() => loadInitialState(STORE_KEYS.TELEMETRY_OBSERVATIONS, generateSeededTelemetry()));
 
   const [activeFarmId, setActiveFarmId] = useState<string>(() => {
@@ -386,88 +288,109 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return stored === null ? true : stored === 'true';
   });
 
-  // Automated Demo Data Seeder function
+  // Sync ActivityLogger callback to AgriStore state
+  useEffect(() => {
+    seedActivityLog(fieldActivities);
+    setActivityCallback((newAct) => {
+      setFieldActivities((prev) => [newAct, ...prev.filter((a) => a.id !== newAct.id)].slice(0, 500));
+      saveActivityToSupabase(newAct);
+    });
+  }, []);
+
   const seedMultiFarmSystem = async () => {
     const res = await seedMultiFarmSystemToSupabase();
     setFarmlands(SEEDED_FARMS);
     setPlots(SEEDED_PLOTS);
     setSensors(SEEDED_SENSORS);
     setTelemetryObservations(generateSeededTelemetry());
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORE_KEYS.FARMLANDS, JSON.stringify(SEEDED_FARMS));
-      localStorage.setItem(STORE_KEYS.PLOTS, JSON.stringify(SEEDED_PLOTS));
-      localStorage.setItem(STORE_KEYS.SENSORS, JSON.stringify(SEEDED_SENSORS));
-      localStorage.setItem(STORE_KEYS.TELEMETRY_OBSERVATIONS, JSON.stringify(generateSeededTelemetry()));
-    }
     return res;
   };
 
-  // 0. Seed farms, plots, and sensors to Supabase on mount
   useEffect(() => {
     saveFarmsToSupabase(farmlands);
     savePlotsToSupabase(plots);
     saveSensorsToSupabase(sensors);
-
-    if (typeof window !== 'undefined') {
-      (window as any).__agriSimulator = telemetrySimulator;
-      console.log(
-        '%c[AgriTwin Multi-Farm Engine] Active',
-        'color: #3ecf8e; font-weight: bold; font-size: 12px;'
-      );
-      console.log(`  🟢 Supabase Status: ${isSupabaseConfigured ? 'CONNECTED' : 'STANDBY'}`);
-      console.log('  📂 public.farms (5) | public.plots (25) | public.sensors (150) | public.telemetry_observations (1000+)');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 1. Real-time Telemetry Subscription (Supabase Realtime)
+  // Real-time Supabase Subscription
   useEffect(() => {
-    // Helper to merge incoming telemetry observations into state
     const processIncomingTelemetry = (incomingObs: TelemetryObservation[]) => {
-      setTelemetryObservations(prev => {
+      setTelemetryObservations((prev) => {
         const obsMap = new Map<string, TelemetryObservation>();
-        (prev || []).forEach(o => { if (o && o.id) obsMap.set(o.id, o); });
-        (incomingObs || []).forEach(o => { if (o && o.id) obsMap.set(o.id, o); });
+        (prev || []).forEach((o) => { if (o && o.id) obsMap.set(o.id, o); });
+        (incomingObs || []).forEach((o) => { if (o && o.id) obsMap.set(o.id, o); });
 
-        const validObs = Array.from(obsMap.values()).filter(o => o && o.id && o.measurementTimestamp);
+        const validObs = Array.from(obsMap.values()).filter((o) => o && o.id && o.measurementTimestamp);
         const mergedList = validObs.sort((a, b) => {
           const tA = new Date(a.measurementTimestamp).getTime() || 0;
           const tB = new Date(b.measurementTimestamp).getTime() || 0;
           return tB - tA;
         });
 
-        // Update active plot state from latest telemetry
-        setPlots(prevPlots => prevPlots.map(plot => {
-          const plotObs = mergedList.filter(o => o.plotId === plot.id || o.plotId === plot.code);
-          if (plotObs.length === 0) return plot;
+        // Update plot live telemetry state
+        setPlots((prevPlots) => {
+          const updatedPlots = prevPlots.map((plot) => {
+            const plotObs = mergedList.filter((o) => o.plotId === plot.id || o.plotId === plot.code);
+            if (plotObs.length === 0) return plot;
 
-          const latestSm = plotObs.find(o => o.parameterKey === 'soil_moisture');
-          const latestTemp = plotObs.find(o => o.parameterKey === 'air_temperature' || o.parameterKey === 'soil_temperature');
-          const latestPh = plotObs.find(o => o.parameterKey === 'soil_ph');
+            const latestSm = plotObs.find((o) => o.parameterKey === 'soil_moisture');
+            const latestTemp = plotObs.find((o) => o.parameterKey === 'air_temperature' || o.parameterKey === 'soil_temperature');
+            const latestPh = plotObs.find((o) => o.parameterKey === 'soil_ph');
+            const latestHum = plotObs.find((o) => o.parameterKey === 'humidity');
 
-          return {
-            ...plot,
-            soilMoisture: latestSm ? latestSm.value : plot.soilMoisture,
-            airTemp: latestTemp ? latestTemp.value : plot.airTemp,
-            soilPh: latestPh ? latestPh.value : plot.soilPh
-          };
-        }));
+            return {
+              ...plot,
+              soilMoisture: latestSm ? latestSm.value : plot.soilMoisture,
+              airTemp: latestTemp ? latestTemp.value : plot.airTemp,
+              soilPh: latestPh ? latestPh.value : plot.soilPh,
+              humidity: latestHum ? latestHum.value : plot.humidity,
+            };
+          });
+
+          // Run alert evaluation on updated plots
+          updatedPlots.forEach((p) => {
+            setAlerts((currentAlerts) => {
+              const newAlerts = evaluatePlotAlerts(p, currentAlerts);
+              if (newAlerts.length > 0) {
+                newAlerts.forEach((na) => {
+                  saveAlertToSupabase(na);
+                  ActivityLogger.alertGenerated(na.title, na.farmId, na.plotId);
+                });
+                return [...newAlerts, ...currentAlerts];
+              }
+              return currentAlerts;
+            });
+          });
+
+          return updatedPlots;
+        });
 
         return mergedList;
       });
     };
 
-    const unsubSupabase = subscribeToSupabaseMultiTable(processIncomingTelemetry);
+    const handleRealtimeActivity = (act: FieldActivity) => {
+      setFieldActivities((prev) => [act, ...prev.filter((a) => a.id !== act.id)].slice(0, 500));
+    };
+
+    const handleRealtimeAlert = (alert: FarmAlert) => {
+      setAlerts((prev) => [alert, ...prev.filter((a) => a.id !== alert.id)]);
+    };
+
+    const unsubSupabase = subscribeToSupabaseMultiTable(
+      processIncomingTelemetry,
+      (f) => setFarmlands(f),
+      (p) => setPlots(p),
+      (s) => setSensors(s),
+      handleRealtimeActivity,
+      handleRealtimeAlert
+    );
 
     return () => {
       unsubSupabase();
     };
   }, []);
 
-  // ── Stable refs so simulator getters always see latest state WITHOUT
-  //    putting mutable arrays in the effect dependency array (which caused
-  //    the simulator to restart on every sensor update — the browser-freeze bug).
   const plotsRef = useRef(plots);
   const cropsRef = useRef(crops);
   const sensorsRef = useRef(sensors);
@@ -475,7 +398,6 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => { cropsRef.current = crops; }, [crops]);
   useEffect(() => { sensorsRef.current = sensors; }, [sensors]);
 
-  // 2. Control Telemetry Simulator Lifecycle — only depends on the boolean flag
   useEffect(() => {
     if (isDemoTelemetryActive) {
       telemetrySimulator.start(
@@ -484,10 +406,21 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         () => sensorsRef.current,
         (_obs, updatedSensors) => {
           if (updatedSensors && updatedSensors.length > 0) {
-            setSensors(prev => {
+            setSensors((prev) => {
               const map = new Map<string, IoTSensor>();
-              (prev || []).forEach(s => map.set(s.id, s));
-              updatedSensors.forEach(s => map.set(s.id, s));
+              (prev || []).forEach((s) => map.set(s.id, s));
+              updatedSensors.forEach((s) => {
+                map.set(s.id, s);
+                // Evaluate sensor alerts
+                setAlerts((currAlerts) => {
+                  const newAlerts = evaluateSensorAlerts(s, currAlerts);
+                  if (newAlerts.length > 0) {
+                    newAlerts.forEach((na) => saveAlertToSupabase(na));
+                    return [...newAlerts, ...currAlerts];
+                  }
+                  return currAlerts;
+                });
+              });
               return Array.from(map.values());
             });
           }
@@ -496,8 +429,6 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } else {
       telemetrySimulator.stop();
     }
-    // Only re-run when the on/off toggle changes, NOT when data arrays change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDemoTelemetryActive]);
 
   const toggleDemoTelemetry = (enable: boolean) => {
@@ -511,81 +442,67 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     await telemetrySimulator.triggerCycle();
   };
 
-  // Save changes to localStorage with safe try-catch wrapper to prevent QuotaExceededError
+  // LocalStorage Persist Effects
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORE_KEYS.CROPS, JSON.stringify(crops));
-        localStorage.setItem('agri_crops', JSON.stringify(crops));
-      } catch (e) {
-        console.warn('[AgriStore] LocalStorage write error (crops):', e);
-      }
+      try { localStorage.setItem(STORE_KEYS.CROPS, JSON.stringify(crops)); } catch {}
     }
   }, [crops]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORE_KEYS.FARMLANDS, JSON.stringify(farmlands));
-      } catch (e) {
-        console.warn('[AgriStore] LocalStorage write error (farmlands):', e);
-      }
+      try { localStorage.setItem(STORE_KEYS.FARMLANDS, JSON.stringify(farmlands)); } catch {}
     }
   }, [farmlands]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORE_KEYS.PLOTS, JSON.stringify(plots));
-        localStorage.setItem('agri_plots', JSON.stringify(plots));
-        window.dispatchEvent(new Event('agri_storage_updated'));
-      } catch (e) {
-        console.warn('[AgriStore] LocalStorage write error (plots):', e);
-      }
+      try { localStorage.setItem(STORE_KEYS.PLOTS, JSON.stringify(plots)); } catch {}
     }
   }, [plots]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORE_KEYS.USERS, JSON.stringify(users));
-      } catch (e) {
-        console.warn('[AgriStore] LocalStorage write error (users):', e);
-      }
+      try { localStorage.setItem(STORE_KEYS.SENSORS, JSON.stringify(sensors)); } catch {}
+    }
+  }, [sensors]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try { localStorage.setItem(STORE_KEYS.USERS, JSON.stringify(users)); } catch {}
     }
   }, [users]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORE_KEYS.AUDIT_LOGS, JSON.stringify(auditLogs));
-        localStorage.setItem('agri_field_audit_log', JSON.stringify(auditLogs));
-      } catch (e) {
-        console.warn('[AgriStore] LocalStorage write error (auditLogs):', e);
-      }
+      try { localStorage.setItem(STORE_KEYS.AUDIT_LOGS, JSON.stringify(auditLogs)); } catch {}
     }
   }, [auditLogs]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      try { localStorage.setItem(STORE_KEYS.FIELD_ACTIVITIES, JSON.stringify(fieldActivities.slice(0, 200))); } catch {}
+    }
+  }, [fieldActivities]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try { localStorage.setItem(STORE_KEYS.ALERTS, JSON.stringify(alerts.slice(0, 100))); } catch {}
+    }
+  }, [alerts]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
       try {
-        // Cap local storage telemetry observations to latest 50 to prevent browser 5MB quota overflow
         const cappedObs = (telemetryObservations || []).slice(0, 50);
         localStorage.setItem(STORE_KEYS.TELEMETRY_OBSERVATIONS, JSON.stringify(cappedObs));
-        window.dispatchEvent(new Event('agri_storage_updated'));
-      } catch (e) {
-        console.warn('[AgriStore] LocalStorage quota exceeded for telemetry observations, safely skipping local write.', e);
-      }
+      } catch {}
     }
   }, [telemetryObservations]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORE_KEYS.ACTIVE_FARM_ID, activeFarmId);
-      } catch (e) {
-        console.warn('[AgriStore] LocalStorage write error (activeFarmId):', e);
-      }
+      try { localStorage.setItem(STORE_KEYS.ACTIVE_FARM_ID, activeFarmId); } catch {}
     }
   }, [activeFarmId]);
 
@@ -594,52 +511,42 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       try {
         if (currentUser) {
           localStorage.setItem(STORE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
-          localStorage.setItem('agritwin_active_session', JSON.stringify(currentUser));
         } else {
           localStorage.removeItem(STORE_KEYS.CURRENT_USER);
-          localStorage.removeItem('agritwin_active_session');
         }
-      } catch (e) {
-        console.warn('[AgriStore] LocalStorage write error (currentUser):', e);
-      }
+      } catch {}
     }
   }, [currentUser]);
 
   const activeFarmland = useMemo(() => {
-    return farmlands.find(f => f.id === activeFarmId) || farmlands[0] || null;
+    return farmlands.find((f) => f.id === activeFarmId) || farmlands[0] || null;
   }, [farmlands, activeFarmId]);
 
   const activeSections = useMemo(() => {
     if (!activeFarmland) return [];
-    const farmPlots = plots.filter(p => p.farmId === activeFarmland.id);
-    const missingFarmId = farmPlots.filter(p => !p.farmId).length;
-    // ── DIAGNOSTIC: Step 7 ──────────────────────────────────────────────────
-    console.log(
-      `[FARM RELATIONSHIP] farmId: ${activeFarmland.id} | farmName: "${activeFarmland.name}" | ` +
-      `plots: ${farmPlots.length} | plotsMissingFarmId: ${missingFarmId}`
-    );
-    return farmPlots;
+    return plots.filter((p) => p.farmId === activeFarmland.id);
   }, [plots, activeFarmland]);
 
   const isAdmin = currentUser?.role === 'admin';
-  const isWorker = currentUser?.role === 'farmer';
+  const isWorker = currentUser?.role === 'farmer' || currentUser?.role === 'worker';
 
   const selectFarmland = (farmId: string) => {
     setActiveFarmId(farmId);
   };
 
+  // ── FARM CRUD ─────────────────────────────────────────────────────────────
   const addFarmland = (
     farmData: Omit<Farmland, 'id' | 'createdAt'>,
-    sectionsData: Array<Partial<PlotBed> & { code: string; name: string; area: number; cropId?: string | null }>
-  ) => {
+    sectionsData?: Array<Partial<PlotBed> & { code: string; name: string; area: number; cropId?: string | null }>
+  ): Farmland => {
     const farmId = `farm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newFarmland: Farmland = {
       ...farmData,
       id: farmId,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
 
-    const newSections: PlotBed[] = sectionsData.map((sec, idx) => ({
+    const newSections: PlotBed[] = (sectionsData || []).map((sec, idx) => ({
       id: `plot_${farmId}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
       farmId,
       code: sec.code,
@@ -653,49 +560,135 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       soilMoisture: sec.soilMoisture ?? 62,
       airTemp: sec.airTemp ?? 25,
       soilPh: sec.soilPh ?? 6.5,
+      humidity: sec.humidity ?? 60,
       parLux: sec.parLux ?? 680,
       daysPlanted: sec.daysPlanted ?? 1,
       isWatering: false,
       hvacActive: false,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     } as any));
 
-    setFarmlands(prev => [newFarmland, ...prev]);
-    setPlots(prev => [...prev, ...newSections]);
+    setFarmlands((prev) => [newFarmland, ...prev]);
+    if (newSections.length > 0) {
+      setPlots((prev) => [...prev, ...newSections]);
+    }
     setActiveFarmId(farmId);
+
+    saveFarmsToSupabase([newFarmland]);
+    if (newSections.length > 0) {
+      savePlotsToSupabase(newSections);
+    }
+
+    ActivityLogger.farmCreated(newFarmland.name, newFarmland.id, currentUser?.full_name);
+
+    return newFarmland;
   };
 
+  const updateFarmland = (farmData: Farmland) => {
+    setFarmlands((prev) => prev.map((f) => (f.id === farmData.id ? farmData : f)));
+    saveFarmsToSupabase([farmData]);
+    ActivityLogger.farmUpdated(farmData.name, farmData.id, `Name/details updated`, currentUser?.full_name);
+  };
+
+  const deleteFarmland = (farmId: string) => {
+    const target = farmlands.find((f) => f.id === farmId);
+    setFarmlands((prev) => prev.filter((f) => f.id !== farmId));
+    setPlots((prev) => prev.filter((p) => p.farmId !== farmId));
+    setSensors((prev) => prev.filter((s) => s.farmId !== farmId));
+
+    deleteFarmFromSupabase(farmId);
+
+    if (activeFarmId === farmId) {
+      const remaining = farmlands.filter((f) => f.id !== farmId);
+      if (remaining.length > 0) setActiveFarmId(remaining[0].id);
+    }
+
+    if (target) {
+      ActivityLogger.farmDeleted(target.name, target.id, currentUser?.full_name);
+    }
+  };
+
+  // ── PLOT CRUD ─────────────────────────────────────────────────────────────
+  const addPlot = (plotData: Omit<PlotBed, 'id' | 'createdAt'>): PlotBed => {
+    const plotId = `plot_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const newPlot: PlotBed = {
+      ...plotData,
+      id: plotId,
+      createdAt: new Date().toISOString(),
+    };
+
+    setPlots((prev) => [...prev, newPlot]);
+    savePlotsToSupabase([newPlot]);
+
+    // Update parent farm sectionsCount
+    if (plotData.farmId) {
+      setFarmlands((prev) =>
+        prev.map((f) => (f.id === plotData.farmId ? { ...f, sectionsCount: (f.sectionsCount || 0) + 1 } : f))
+      );
+    }
+
+    ActivityLogger.plotCreated(newPlot.name, newPlot.farmId || '', newPlot.id, currentUser?.full_name);
+    return newPlot;
+  };
+
+  const updatePlot = (plotData: PlotBed) => {
+    setPlots((prev) => prev.map((p) => (p.id === plotData.id ? plotData : p)));
+    savePlotsToSupabase([plotData]);
+    ActivityLogger.plotUpdated(plotData.name, plotData.farmId || '', plotData.id, `Parameters/crop updated`, currentUser?.full_name);
+  };
+
+  const deletePlot = (plotId: string) => {
+    const target = plots.find((p) => p.id === plotId);
+    setPlots((prev) => prev.filter((p) => p.id !== plotId));
+    deletePlotFromSupabase(plotId);
+    if (target) {
+      ActivityLogger.plotDeleted(target.name, target.farmId || '', target.id, currentUser?.full_name);
+    }
+  };
+
+  // ── CROP CRUD ─────────────────────────────────────────────────────────────
   const addCrop = (cropData: Omit<Crop, 'id'>): Crop => {
     const newCrop: Crop = {
       ...cropData,
       id: `crop_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
-    setCrops(prev => [newCrop, ...prev]);
+    setCrops((prev) => [newCrop, ...prev]);
     return newCrop;
   };
 
   const updateCrop = (cropData: Crop) => {
-    setCrops(prev => prev.map(c => c.id === cropData.id ? cropData : c));
+    setCrops((prev) => prev.map((c) => (c.id === cropData.id ? cropData : c)));
   };
 
   const deleteCrop = (cropId: string) => {
-    setCrops(prev => prev.filter(c => c.id !== cropId));
-    setPlots(prev => prev.map(p => p.cropId === cropId ? { ...p, cropId: null } : p));
+    setCrops((prev) => prev.filter((c) => c.id !== cropId));
+    setPlots((prev) => prev.map((p) => (p.cropId === cropId ? { ...p, cropId: null } : p)));
   };
 
   const assignCropToSection = (sectionId: string, cropId: string | null) => {
-    setPlots(prev => prev.map(p => p.id === sectionId ? { ...p, cropId } : p));
+    setPlots((prev) => prev.map((p) => (p.id === sectionId ? { ...p, cropId } : p)));
+    const targetPlot = plots.find((p) => p.id === sectionId);
+    if (targetPlot) {
+      const crop = crops.find((c) => c.id === cropId);
+      ActivityLogger.plotUpdated(
+        targetPlot.name,
+        targetPlot.farmId || '',
+        targetPlot.id,
+        `Assigned crop: ${crop ? crop.name : 'None'}`,
+        currentUser?.full_name
+      );
+    }
   };
 
+  // ── ACTUATOR TRIGGER ──────────────────────────────────────────────────────
   const triggerActuator = async (
-    sectionId: string, 
-    type: 'irrigation' | 'hvac' | 'growLight', 
+    sectionId: string,
+    type: 'irrigation' | 'hvac' | 'growLight',
     mode: 'manual' | 'auto' = 'manual'
   ) => {
-    const plot = plots.find(p => p.id === sectionId);
+    const plot = plots.find((p) => p.id === sectionId);
     const operator = currentUser?.full_name || 'System Operator';
-
     if (!plot) return;
 
     let updatedPlot = { ...plot };
@@ -705,20 +698,22 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const boostedMoisture = Math.min(95, Number((plot.soilMoisture + 8.5).toFixed(1)));
       updatedPlot = { ...plot, isWatering: true, soilMoisture: boostedMoisture };
       details = `${operator} executed 15-Min Precision Pulse on ${plot.code}. Moisture set to ${boostedMoisture}%. (${mode.toUpperCase()})`;
+      ActivityLogger.irrigationTriggered(plot.code, boostedMoisture, operator, plot.farmId, plot.id);
     } else if (type === 'hvac') {
       const nextHvac = !plot.hvacActive;
       const reducedTemp = nextHvac ? Number((plot.airTemp - 2.0).toFixed(1)) : plot.airTemp;
       updatedPlot = { ...plot, hvacActive: nextHvac, airTemp: reducedTemp };
       details = `${operator} toggled Canopy Fan ${nextHvac ? 'ON' : 'OFF'} on ${plot.code}. Temp adjusted to ${reducedTemp}°C. (${mode.toUpperCase()})`;
+      ActivityLogger.hvacTriggered(plot.code, nextHvac, reducedTemp, operator, plot.farmId, plot.id);
     } else {
       details = `${operator} toggled Grow Light on ${plot.code}. (${mode.toUpperCase()})`;
     }
 
-    setPlots(prev => prev.map(p => p.id === sectionId ? updatedPlot : p));
+    setPlots((prev) => prev.map((p) => (p.id === sectionId ? updatedPlot : p)));
 
     if (type === 'irrigation') {
       setTimeout(() => {
-        setPlots(prev => prev.map(p => p.id === sectionId ? { ...p, isWatering: false } : p));
+        setPlots((prev) => prev.map((p) => (p.id === sectionId ? { ...p, isWatering: false } : p)));
       }, 2000);
     }
 
@@ -729,12 +724,13 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       plot_code: plot.code,
       action_type: type === 'growLight' ? 'grow_light' : type,
       triggered_by: mode,
-      details
+      details,
     };
 
-    setAuditLogs(prev => [newLog, ...prev]);
+    setAuditLogs((prev) => [newLog, ...prev]);
   };
 
+  // ── TELEMETRY OBSERVATION ─────────────────────────────────────────────────
   const addTelemetryObservation = (
     obsData: Omit<TelemetryObservation, 'id' | 'receivedTimestamp'>
   ): TelemetryObservation => {
@@ -742,92 +738,127 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const newObs: TelemetryObservation = {
       ...obsData,
       id,
-      receivedTimestamp: new Date().toISOString()
+      receivedTimestamp: new Date().toISOString(),
     };
 
-    setTelemetryObservations(prev => [newObs, ...prev]);
-
-    // Save directly to Supabase PostgreSQL database
+    setTelemetryObservations((prev) => [newObs, ...prev]);
     saveTelemetryObservationToSupabase(newObs);
 
-    // Update target plot's Digital Twin state
-    setPlots(prev => prev.map(p => {
-      if (p.id === obsData.plotId || p.code === obsData.plotId) {
-        const updated = { ...p };
-        if (obsData.parameterKey === 'soil_moisture') updated.soilMoisture = obsData.value;
-        if (obsData.parameterKey === 'air_temperature') updated.airTemp = obsData.value;
-        if (obsData.parameterKey === 'soil_ph') updated.soilPh = obsData.value;
-        return updated;
-      }
-      return p;
-    }));
+    // Update plot
+    setPlots((prev) =>
+      prev.map((p) => {
+        if (p.id === obsData.plotId || p.code === obsData.plotId) {
+          const updated = { ...p };
+          if (obsData.parameterKey === 'soil_moisture') updated.soilMoisture = obsData.value;
+          if (obsData.parameterKey === 'air_temperature') updated.airTemp = obsData.value;
+          if (obsData.parameterKey === 'soil_ph') updated.soilPh = obsData.value;
+          if (obsData.parameterKey === 'humidity') updated.humidity = obsData.value;
+          return updated;
+        }
+        return p;
+      })
+    );
 
-    // Record Audit Log Entry for manual observation
-    const newAuditLog: AuditLogEntry = {
-      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: new Date().toISOString(),
-      plot_id: obsData.plotId,
-      plot_code: obsData.plotId,
-      action_type: 'manual_note',
-      triggered_by: 'manual',
-      details: `Manual Observation Submitted: ${obsData.displayName} = ${obsData.value} ${obsData.unit} [${obsData.dataSource}]`
-    };
-
-    setAuditLogs(prev => [newAuditLog, ...prev]);
+    ActivityLogger.manualObservation(
+      obsData.displayName || obsData.parameterKey,
+      obsData.value,
+      obsData.unit,
+      obsData.plotId,
+      currentUser?.full_name || 'User',
+      obsData.farmId,
+      obsData.plotId
+    );
 
     return newObs;
   };
 
+  // ── ALERTS CRUD ───────────────────────────────────────────────────────────
+  const addAlert = (alertData: Omit<FarmAlert, 'id' | 'createdAt'>): FarmAlert => {
+    const newAlert: FarmAlert = {
+      ...alertData,
+      id: `alert_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: new Date().toISOString(),
+    };
+    setAlerts((prev) => [newAlert, ...prev]);
+    saveAlertToSupabase(newAlert);
+    return newAlert;
+  };
+
+  const resolveAlert = (alertId: string, resolvedBy?: string) => {
+    const target = alerts.find((a) => a.id === alertId);
+    const by = resolvedBy || currentUser?.full_name || 'Operator';
+    setAlerts((prev) =>
+      prev.map((a) =>
+        a.id === alertId
+          ? { ...a, status: 'resolved' as const, resolvedAt: new Date().toISOString(), resolvedBy: by }
+          : a
+      )
+    );
+    if (target) {
+      ActivityLogger.alertResolved(target.title, by, target.farmId);
+    }
+  };
+
+  const dismissAlert = (alertId: string) => {
+    setAlerts((prev) =>
+      prev.map((a) => (a.id === alertId ? { ...a, status: 'dismissed' as const } : a))
+    );
+  };
+
+  // ── FIELD ACTIVITY ────────────────────────────────────────────────────────
+  const addFieldActivity = (activity: Omit<FieldActivity, 'id' | 'timestamp'>): FieldActivity => {
+    const newAct: FieldActivity = {
+      ...activity,
+      id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+    };
+    setFieldActivities((prev) => [newAct, ...prev]);
+    saveActivityToSupabase(newAct);
+    return newAct;
+  };
+
+  // ── USER MANAGEMENT ───────────────────────────────────────────────────────
   const addUser = (userData: Omit<UserProfile, 'uid' | 'created_at'>): UserProfile => {
     const uid = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newUser: UserProfile = {
       ...userData,
       uid,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
-    setUsers(prev => [...prev, newUser]);
+    setUsers((prev) => [...prev, newUser]);
     return newUser;
   };
 
-  const updateUserRole = (uid: string, role: 'admin' | 'farmer') => {
-    setUsers(prev => prev.map(u => u.uid === uid ? { ...u, role } : u));
+  const updateUserRole = (uid: string, role: any) => {
+    setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, role } : u)));
     if (currentUser?.uid === uid) {
-      setCurrentUser(prev => prev ? { ...prev, role } : null);
+      setCurrentUser((prev) => (prev ? { ...prev, role } : null));
     }
   };
 
   const deleteUser = (uid: string) => {
-    setUsers(prev => prev.filter(u => u.uid !== uid));
+    setUsers((prev) => prev.filter((u) => u.uid !== uid));
   };
 
   const exportFarmlandCsv = () => {
-    if (!activeFarmland) return;
-    const headers = ['Farmland Name', 'Location', 'Section Code', 'Section Name', 'Area', 'Unit', 'Assigned Crop', 'Node ID', 'Soil Moisture (%)', 'Air Temp (°C)', 'Soil pH'];
-    const rows = activeSections.map(s => {
-      const crop = crops.find(c => c.id === s.cropId);
-      return [
-        activeFarmland.name,
-        activeFarmland.location,
-        s.code,
-        s.name,
-        s.area,
-        s.areaUnit,
-        crop ? `${crop.name} (${crop.variety})` : 'Fallow Land',
-        s.sensorNodeId,
-        s.soilMoisture,
-        s.airTemp,
-        s.soilPh
-      ];
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${activeFarmland.name.replace(/\s+/g, '_')}_manifest.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const headers = ['Farm ID', 'Farm Name', 'Location', 'Total Area', 'Unit', 'Sections Count', 'Health Score'];
+    const rows = farmlands.map((f) => [
+      f.id,
+      f.name,
+      f.location,
+      f.totalArea,
+      f.unit,
+      f.sectionsCount,
+      f.healthScore ?? 90,
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agritwin_farmlands_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    ActivityLogger.csvExported('Farmlands List', farmlands.length, currentUser?.full_name);
   };
 
   return (
@@ -839,6 +870,8 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         sensors,
         users,
         auditLogs,
+        fieldActivities,
+        alerts,
         telemetryObservations,
         activeFarmland,
         activeSections,
@@ -852,16 +885,25 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setCurrentUser,
         selectFarmland,
         addFarmland,
+        updateFarmland,
+        deleteFarmland,
+        addPlot,
+        updatePlot,
+        deletePlot,
         addCrop,
         updateCrop,
         deleteCrop,
         assignCropToSection,
         triggerActuator,
         addTelemetryObservation,
+        addAlert,
+        resolveAlert,
+        dismissAlert,
+        addFieldActivity,
         addUser,
         updateUserRole,
         deleteUser,
-        exportFarmlandCsv
+        exportFarmlandCsv,
       }}
     >
       {children}
@@ -877,4 +919,4 @@ export const useAgriStore = () => {
   return context;
 };
 
-export default useAgriStore;
+export default AgriStoreProvider;

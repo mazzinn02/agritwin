@@ -6,85 +6,84 @@ import {
   Sprout,
   Droplets,
   Thermometer,
-  Beaker,
   Activity,
   CheckCircle2,
   AlertCircle,
-  Database,
-  Cpu,
   MapPin,
-  BarChart3,
-  Leaf,
-  Sun,
-  Wind,
-  Zap,
   HeartPulse,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  Edit2,
+  Trash2,
+  Phone,
+  User,
+  Radio,
+  X,
+  Save,
+  Check
 } from 'lucide-react';
 import { useAgriStore } from '../context/AgriStore';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { Farmland, PlotBed } from '../types';
 
-// Crop emoji and color map for visual richness
 const CROP_META: Record<string, { emoji: string; color: string; bg: string; border: string }> = {
-  'Wheat':       { emoji: '🌾', color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200' },
-  'Rice':        { emoji: '🌾', color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
-  'Maize':       { emoji: '🌽', color: 'text-yellow-700',  bg: 'bg-yellow-50',  border: 'border-yellow-200' },
-  'Sugarcane':   { emoji: '🎋', color: 'text-lime-700',    bg: 'bg-lime-50',    border: 'border-lime-200' },
-  'Cotton':      { emoji: '🌿', color: 'text-slate-700',   bg: 'bg-slate-50',   border: 'border-slate-200' },
-  'Lettuce':     { emoji: '🥬', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-  'Bell Pepper': { emoji: '🫑', color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200' },
-  'Tomato':      { emoji: '🍅', color: 'text-rose-700',    bg: 'bg-rose-50',    border: 'border-rose-200' },
-  'Strawberry':  { emoji: '🍓', color: 'text-pink-700',    bg: 'bg-pink-50',    border: 'border-pink-200' },
-  'Cucumber':    { emoji: '🥒', color: 'text-teal-700',    bg: 'bg-teal-50',    border: 'border-teal-200' },
-  'Soybean':     { emoji: '🫘', color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
-  'Chilli':      { emoji: '🌶️', color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200' },
-  'Brinjal':     { emoji: '🍆', color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200' },
-  'Okra':        { emoji: '🌿', color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
-  'Groundnut':   { emoji: '🥜', color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200' },
-  'Spices':      { emoji: '🌶️', color: 'text-orange-700',  bg: 'bg-orange-50',  border: 'border-orange-200' },
-  'Pulses':      { emoji: '🫘', color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200' },
-  'Mustard':     { emoji: '🌼', color: 'text-yellow-700',  bg: 'bg-yellow-50',  border: 'border-yellow-200' },
-  'Turmeric':    { emoji: '🟡', color: 'text-yellow-700',  bg: 'bg-yellow-50',  border: 'border-yellow-200' },
-  'Saffron':     { emoji: '🌸', color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200' },
-  'Quinoa':      { emoji: '🌾', color: 'text-indigo-700',  bg: 'bg-indigo-50',  border: 'border-indigo-200' },
+  'Wheat':       { emoji: '??', color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200' },
+  'Rice':        { emoji: '??', color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
+  'Maize':       { emoji: '??', color: 'text-yellow-700',  bg: 'bg-yellow-50',  border: 'border-yellow-200' },
+  'Sugarcane':   { emoji: '??', color: 'text-lime-700',    bg: 'bg-lime-50',    border: 'border-lime-200' },
+  'Cotton':      { emoji: '??', color: 'text-slate-700',   bg: 'bg-slate-50',   border: 'border-slate-200' },
+  'Lettuce':     { emoji: '??', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  'Bell Pepper': { emoji: '??', color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200' },
+  'Tomato':      { emoji: '??', color: 'text-rose-700',    bg: 'bg-rose-50',    border: 'border-rose-200' },
+  'Strawberry':  { emoji: '??', color: 'text-pink-700',    bg: 'bg-pink-50',    border: 'border-pink-200' },
+  'Cucumber':    { emoji: '??', color: 'text-teal-700',    bg: 'bg-teal-50',    border: 'border-teal-200' },
+  'Soybean':     { emoji: '??', color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
+  'Chilli':      { emoji: '???', color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200' },
+  'Brinjal':     { emoji: '??', color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200' },
+  'Okra':        { emoji: '??', color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
+  'Groundnut':   { emoji: '??', color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200' },
 };
 
-function getCropMeta(crop: string) {
-  return CROP_META[crop] || { emoji: '🌱', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+function getCropMeta(crop?: string) {
+  if (!crop) return { emoji: '??', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+  return CROP_META[crop] || { emoji: '??', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' };
 }
-
-const STAGE_COLOR: Record<string, string> = {
-  'Germination': 'bg-slate-100 text-slate-700 border-slate-300',
-  'Vegetative':  'bg-lime-100 text-lime-800 border-lime-300',
-  'Flowering':   'bg-pink-100 text-pink-800 border-pink-300',
-  'Fruiting':    'bg-orange-100 text-orange-800 border-orange-300',
-  'Maturation':  'bg-amber-100 text-amber-800 border-amber-300',
-  'Harvesting':  'bg-emerald-100 text-emerald-800 border-emerald-300',
-};
-
-const FARM_ACCENTS = [
-  { border: 'border-l-emerald-500', badge: 'bg-emerald-500', light: 'bg-emerald-50' },
-  { border: 'border-l-blue-500',    badge: 'bg-blue-500',    light: 'bg-blue-50' },
-  { border: 'border-l-purple-500',  badge: 'bg-purple-500',  light: 'bg-purple-50' },
-  { border: 'border-l-amber-500',   badge: 'bg-amber-500',   light: 'bg-amber-50' },
-  { border: 'border-l-rose-500',    badge: 'bg-rose-500',    light: 'bg-rose-50' },
-];
-
 export const MyFarms: React.FC = () => {
-  const { 
-    farmlands, 
-    plots, 
-    sensors, 
-    telemetryObservations, 
+  const {
+    farmlands,
+    plots,
+    sensors,
+    addFarmland,
+    updateFarmland,
+    deleteFarmland,
+    addPlot,
+    updatePlot,
+    deletePlot,
     seedMultiFarmSystem,
-    isDemoTelemetryActive,
-    toggleDemoTelemetry,
-    triggerTelemetrySimulationNow
+    selectFarmland,
+    activeFarmland,
+    crops,
   } = useAgriStore();
 
-  const [expandedFarm, setExpandedFarm] = useState<string | null>(null);
+  const [expandedFarm, setExpandedFarm] = useState<string | null>(farmlands[0]?.id || null);
   const [seeding, setSeeding] = useState(false);
-  const [simulating, setSimulating] = useState(false);
+
+  // Edit Farm Modal State
+  const [editingFarm, setEditingFarm] = useState<Farmland | null>(null);
+  const [isAddFarmOpen, setIsAddFarmOpen] = useState(false);
+  const [newFarmName, setNewFarmName] = useState('');
+  const [newFarmLocation, setNewFarmLocation] = useState('');
+  const [newFarmArea, setNewFarmArea] = useState('20');
+  const [newFarmOwner, setNewFarmOwner] = useState('');
+  const [newFarmPhone, setNewFarmPhone] = useState('');
+
+  // Plot Modal State
+  const [editingPlot, setEditingPlot] = useState<PlotBed | null>(null);
+  const [isAddPlotOpen, setIsAddPlotOpen] = useState<string | null>(null); // farmId
+  const [newPlotName, setNewPlotName] = useState('');
+  const [newPlotCode, setNewPlotCode] = useState('');
+  const [newPlotArea, setNewPlotArea] = useState('5');
+  const [newPlotCrop, setNewPlotCrop] = useState('Tomato');
+  const [newPlotStage, setNewPlotStage] = useState<'Germination' | 'Vegetative' | 'Flowering' | 'Fruiting' | 'Maturation' | 'Harvesting'>('Vegetative');
 
   const handleSeed = async () => {
     setSeeding(true);
@@ -92,252 +91,678 @@ export const MyFarms: React.FC = () => {
     setSeeding(false);
   };
 
-  const handleSimulate = async () => {
-    setSimulating(true);
-    await triggerTelemetrySimulationNow();
-    setTimeout(() => setSimulating(false), 800);
+  const handleCreateFarm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFarmName.trim() || !newFarmLocation.trim()) return;
+
+    addFarmland({
+      name: newFarmName.trim(),
+      location: newFarmLocation.trim(),
+      totalArea: parseFloat(newFarmArea) || 10,
+      unit: 'acres',
+      sectionsCount: 0,
+      sensorsCount: 0,
+      healthScore: 90,
+      ownerName: newFarmOwner.trim() || 'Farm Owner',
+      contactPhone: newFarmPhone.trim() || '+91 98765 00000',
+      contactRole: 'Owner',
+    });
+
+    setNewFarmName('');
+    setNewFarmLocation('');
+    setNewFarmArea('20');
+    setNewFarmOwner('');
+    setNewFarmPhone('');
+    setIsAddFarmOpen(false);
   };
 
+  const handleSaveFarmEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFarm) return;
+    updateFarmland(editingFarm);
+    setEditingFarm(null);
+  };
+
+  const handleCreatePlot = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAddPlotOpen || !newPlotName.trim() || !newPlotCode.trim()) return;
+
+    const matchedCrop = crops.find(c => c.name.toLowerCase() === newPlotCrop.toLowerCase());
+
+    addPlot({
+      farmId: isAddPlotOpen,
+      code: newPlotCode.trim().toUpperCase(),
+      name: newPlotName.trim(),
+      area: parseFloat(newPlotArea) || 5,
+      areaUnit: 'acres',
+      cropId: matchedCrop ? matchedCrop.id : null,
+      cropType: newPlotCrop,
+      growthStage: newPlotStage,
+      sensorNodeId: `NODE-${isAddPlotOpen.slice(-4)}-${newPlotCode.trim().toUpperCase()}`,
+      sensorId: `NODE-${isAddPlotOpen.slice(-4)}-${newPlotCode.trim().toUpperCase()}`,
+      soilMoisture: 60,
+      airTemp: 25,
+      soilPh: 6.5,
+      humidity: 65,
+      daysPlanted: 30,
+      soilHealthScore: 88,
+      irrigationStatus: 'Scheduled',
+    });
+
+    setNewPlotName('');
+    setNewPlotCode('');
+    setNewPlotArea('5');
+    setIsAddPlotOpen(null);
+  };
+
+  const handleSavePlotEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPlot) return;
+    updatePlot(editingPlot);
+    setEditingPlot(null);
+  };
   return (
-    <div className="space-y-6 font-sans">
-      {/* ── Header ─────────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white rounded-3xl p-6 border border-emerald-900/60 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 font-sans text-slate-800">
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white rounded-3xl p-6 shadow-xl border border-emerald-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center space-x-2 mb-2">
-            <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-emerald-500/30">
-              🌾 Digital Twin Farm Network
-            </span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border font-mono ${isSupabaseConfigured ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-              {isSupabaseConfigured ? '● Supabase Connected' : '○ Local Mode'}
-            </span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${isDemoTelemetryActive ? 'bg-emerald-950 text-emerald-300 border-emerald-700 animate-pulse' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-              {isDemoTelemetryActive ? '● Realtime Simulator (Every 12s)' : '○ Simulator Paused'}
+          <div className="flex items-center space-x-2">
+            <span className="bg-emerald-500/20 text-emerald-300 text-[11px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-emerald-500/30 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+              Multi-Farm Management
             </span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight">My Farm Digital Twins</h1>
-          <p className="text-xs text-slate-300 mt-1">
-            {farmlands.length} farms · {plots.length} plots · {sensors.length} sensors · {telemetryObservations.length.toLocaleString()} telemetry records
+          <h1 className="text-2xl lg:text-3xl font-black mt-2 tracking-tight">My Farms &amp; Field Plots</h1>
+          <p className="text-xs text-slate-300 mt-1 max-w-2xl">
+            Create, manage, and configure your farms, crop plots, and assigned IoT sensors. All updates synchronize instantly across dashboards and Supabase.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 flex-wrap">
           <button
-            onClick={handleSimulate}
-            disabled={simulating}
-            className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all cursor-pointer disabled:opacity-60"
-            title="Generates live sensor readings immediately for all 25 plots and updates Supabase"
+            onClick={() => setIsAddFarmOpen(true)}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <Zap className={`w-4 h-4 fill-slate-950 ${simulating ? 'animate-bounce' : ''}`} />
-            {simulating ? 'Updating Sensors...' : '⚡ SIMULATE LIVE READINGS'}
+            <Plus className="w-4 h-4" />
+            Add New Farm
           </button>
-
           <button
             onClick={handleSeed}
             disabled={seeding}
-            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs rounded-xl border border-slate-700 shadow-lg flex items-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
           >
-            {seeding ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4 text-emerald-400" />}
-            {seeding ? 'Seeding...' : 'Reset Seed Data'}
+            {seeding ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Reset Demo System
           </button>
         </div>
       </div>
 
-      {/* ── Farm Cards ─────────────────────────────────────────────────────────── */}
-      <div className="space-y-5">
-        {farmlands.map((farm, farmIdx) => {
-          const accent = FARM_ACCENTS[farmIdx % FARM_ACCENTS.length];
-          const farmPlots = plots.filter(p => p.farmId === farm.id);
-          const farmSensors = sensors.filter(s => s.farmId === farm.id);
-          const onlineSensors = farmSensors.filter(s => s.status === 'Online').length;
-          const isOpen = expandedFarm === farm.id;
-
-          // Unique crops this farm grows
-          const uniqueCrops: string[] = Array.from(new Set(farmPlots.map(p => p.cropType || 'N/A').filter((c): c is string => Boolean(c))));
+      {/* Farms List */}
+      <div className="space-y-4">
+        {farmlands.map((farm) => {
+          const isExpanded = expandedFarm === farm.id;
+          const farmPlots = plots.filter((p) => p.farmId === farm.id);
+          const farmSensors = sensors.filter((s) => s.farmId === farm.id);
+          const onlineSensors = farmSensors.filter((s) => s.status === 'Online').length;
+          const isSelected = activeFarmland?.id === farm.id;
 
           return (
-            <div
-              key={farm.id}
-              className={`bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden border-l-4 ${accent.border}`}
-            >
-              {/* ── Farm Header ──────────────────────────────────────────────────── */}
-              <div
-                onClick={() => setExpandedFarm(isOpen ? null : farm.id)}
-                className="p-5 cursor-pointer hover:bg-slate-50/80 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center space-x-4">
-                    <div className={`w-11 h-11 rounded-2xl ${accent.badge} flex items-center justify-center text-white font-black text-lg shadow-md shrink-0`}>
-                      {farmIdx + 1}
-                    </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h2 className="font-black text-base text-slate-900">{farm.name}</h2>
-                        <span className={`w-2 h-2 rounded-full animate-pulse ${isSupabaseConfigured ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                      </div>
-                      <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500">
-                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{farm.location}</span>
-                        <span>·</span>
-                        <span>{farm.totalArea} {farm.unit}</span>
-                      </div>
-
-                      {/* Crop Badges Row */}
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {uniqueCrops.map((crop: string) => {
-                          const meta = getCropMeta(crop);
-                          return (
-                            <span
-                              key={crop}
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border ${meta.bg} ${meta.color} ${meta.border}`}
-                            >
-                              {meta.emoji} {crop}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
+            <div key={farm.id} className={`bg-white rounded-3xl border transition-all shadow-xs ${
+              isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200'
+            }`}>
+              {/* Farm Header Card */}
+              <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100">
+                <div
+                  onClick={() => setExpandedFarm(isExpanded ? null : farm.id)}
+                  className="flex items-start gap-4 cursor-pointer flex-1"
+                >
+                  <div className="p-3 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 mt-1">
+                    <Building2 className="w-6 h-6" />
                   </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-lg font-black text-slate-900">{farm.name}</h2>
+                      {isSelected && (
+                        <span className="text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                          Active Dashboard Farm
+                        </span>
+                      )}
+                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-slate-400" /> {farm.location}
+                      </span>
+                    </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    {/* Health Score */}
-                    <div className="text-right hidden md:block">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Health</div>
-                      <div className="text-xl font-black text-emerald-600">{farm.healthScore || 92}<span className="text-xs text-slate-400">/100</span></div>
-                    </div>
-                    {/* Stats */}
-                    <div className="hidden md:flex flex-col gap-1 text-[10px] text-slate-500">
-                      <span className="flex items-center gap-1"><Sprout className="w-3 h-3 text-emerald-500" />{farmPlots.length} Plots</span>
-                      <span className="flex items-center gap-1"><Cpu className="w-3 h-3 text-indigo-500" />{onlineSensors}/{farmSensors.length} Online</span>
-                    </div>
-                    <div className="p-2 rounded-xl bg-slate-100 text-slate-500">
-                      {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    <div className="flex items-center gap-4 text-xs text-slate-600 flex-wrap pt-1">
+                      <span>Area: <strong className="text-slate-900">{farm.totalArea} {farm.unit}</strong></span>
+                      <span>&bull;</span>
+                      <span>Owner: <strong className="text-slate-900">{farm.ownerName || farm.contactPerson || 'Farm Owner'}</strong></span>
+                      <span>&bull;</span>
+                      <span>Contact: <strong className="text-slate-900">{farm.contactPhone || '+91 98765 00000'}</strong></span>
+                      <span>&bull;</span>
+                      <span>Plots: <strong className="text-emerald-700">{farmPlots.length} Plots</strong></span>
+                      <span>&bull;</span>
+                      <span>Sensors: <strong className="text-indigo-700">{farmSensors.length} Units ({onlineSensors} Online)</strong></span>
                     </div>
                   </div>
                 </div>
 
-                {/* Quick stat strip */}
-                <div className="grid grid-cols-4 gap-3 mt-4 pt-3 border-t border-slate-100">
-                  <div className="text-center">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase">Plots</div>
-                    <div className="text-lg font-black text-slate-900">{farmPlots.length}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase">Sensors</div>
-                    <div className="text-lg font-black text-slate-900">{farmSensors.length}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase">Crops</div>
-                    <div className="text-lg font-black text-slate-900">{uniqueCrops.length}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase">Area</div>
-                    <div className="text-lg font-black text-slate-900">{farm.totalArea}<span className="text-xs font-normal text-slate-400"> ac</span></div>
-                  </div>
+                <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
+                  <button
+                    onClick={() => selectFarmland(farm.id)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {isSelected ? '? Selected' : 'Set as Active'}
+                  </button>
+
+                  <button
+                    onClick={() => setEditingFarm(farm)}
+                    className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-200 cursor-pointer"
+                    title="Edit Farm Details"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete "${farm.name}"? This will also remove its ${farmPlots.length} plots.`)) {
+                        deleteFarmland(farm.id);
+                      }
+                    }}
+                    className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-slate-200 cursor-pointer"
+                    title="Delete Farm"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => setExpandedFarm(isExpanded ? null : farm.id)}
+                    className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                  >
+                    {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
+              {/* Plots Section */}
+              {isExpanded && (
+                <div className="p-5 bg-slate-50/50 space-y-4 rounded-b-3xl">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                      <Sprout className="w-4 h-4 text-emerald-600" />
+                      Field Plots ({farmPlots.length})
+                    </h3>
+                    <button
+                      onClick={() => setIsAddPlotOpen(farm.id)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Plot to {farm.name}
+                    </button>
+                  </div>
 
-              {/* ── Expanded Plots View ───────────────────────────────────────────── */}
-              {isOpen && (
-                <div className={`${accent.light} border-t border-slate-100 p-5`}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {farmPlots.map(plot => {
-                      const cropMeta = getCropMeta(plot.cropType || '');
-                      const stageClass = STAGE_COLOR[plot.growthStage || ''] || 'bg-slate-100 text-slate-700 border-slate-200';
-                      const plotSensors = sensors.filter(s => s.plotId === plot.id);
-                      const latestObs = telemetryObservations.filter(o => o.plotId === plot.id);
-                      const latestMoisture = latestObs.find(o => o.parameterKey === 'soil_moisture')?.value ?? plot.soilMoisture;
-                      const latestTemp = latestObs.find(o => o.parameterKey === 'air_temperature')?.value ?? plot.airTemp;
-                      const latestPh = latestObs.find(o => o.parameterKey === 'soil_ph')?.value ?? plot.soilPh;
+                  {farmPlots.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-xs bg-white rounded-2xl border border-dashed border-slate-300">
+                      No plots registered in this farm yet. Click "Add Plot" above to get started.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {farmPlots.map((plot) => {
+                        const cropMeta = getCropMeta(plot.cropType);
+                        const plotSensors = sensors.filter((s) => s.plotId === plot.id);
 
-                      return (
-                        <div key={plot.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                          {/* Plot Header */}
-                          <div className={`px-4 py-3 ${cropMeta.bg} border-b ${cropMeta.border} flex items-center justify-between`}>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-2xl">{cropMeta.emoji}</span>
+                        return (
+                          <div key={plot.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-emerald-600 text-white font-mono text-[10px] font-black rounded">
+                                  {plot.code}
+                                </span>
+                                <h4 className="font-extrabold text-sm text-slate-900">{plot.name}</h4>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => setEditingPlot(plot)}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                  title="Edit Plot"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Delete plot "${plot.name}" (${plot.code})?`)) {
+                                      deletePlot(plot.id);
+                                    }
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                  title="Delete Plot"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-xl border flex items-center gap-1.5 ${cropMeta.bg} ${cropMeta.color} ${cropMeta.border}`}>
+                                <span>{cropMeta.emoji}</span>
+                                <span>{plot.cropType || 'Crop'}</span>
+                              </span>
+                              <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg">
+                                {plot.growthStage || 'Vegetative'}
+                              </span>
+                              <span className="text-[11px] text-slate-500 ml-auto font-medium">
+                                {plot.area} {plot.areaUnit || 'acres'}
+                              </span>
+                            </div>
+
+                            {/* Live Metrics */}
+                            <div className="grid grid-cols-3 gap-2 text-center bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs">
                               <div>
-                                <div className="font-black text-sm text-slate-900">{plot.cropType || 'Unassigned'}</div>
-                                <div className="text-[10px] font-mono text-slate-500">{plot.code} · {plot.area} ac</div>
+                                <span className="text-[10px] text-slate-400 font-bold block">Moisture</span>
+                                <strong className="text-blue-700 font-black">{plot.soilMoisture.toFixed(1)}%</strong>
                               </div>
-                            </div>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${stageClass}`}>
-                              {plot.growthStage}
-                            </span>
-                          </div>
-
-                          {/* Plot Body — Sensor Readings */}
-                          <div className="p-4 space-y-3">
-                            <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">Live Sensor Readings</div>
-
-                            <div className="grid grid-cols-3 gap-2">
-                              {/* Soil Moisture */}
-                              <div className="bg-blue-50 rounded-xl p-2.5 border border-blue-100 text-center">
-                                <Droplets className="w-4 h-4 text-blue-500 mx-auto mb-0.5" />
-                                <div className="font-black text-sm text-slate-900">{Number(latestMoisture || 0).toFixed(1)}<span className="text-[9px] text-slate-400">%</span></div>
-                                <div className="text-[9px] text-slate-400 font-bold">Moisture</div>
+                              <div>
+                                <span className="text-[10px] text-slate-400 font-bold block">Temp</span>
+                                <strong className="text-rose-700 font-black">{plot.airTemp.toFixed(1)}�C</strong>
                               </div>
-
-                              {/* Air Temp */}
-                              <div className="bg-orange-50 rounded-xl p-2.5 border border-orange-100 text-center">
-                                <Thermometer className="w-4 h-4 text-orange-500 mx-auto mb-0.5" />
-                                <div className="font-black text-sm text-slate-900">{Number(latestTemp || 0).toFixed(1)}<span className="text-[9px] text-slate-400">°C</span></div>
-                                <div className="text-[9px] text-slate-400 font-bold">Air Temp</div>
-                              </div>
-
-                              {/* Soil pH */}
-                              <div className="bg-purple-50 rounded-xl p-2.5 border border-purple-100 text-center">
-                                <Beaker className="w-4 h-4 text-purple-500 mx-auto mb-0.5" />
-                                <div className="font-black text-sm text-slate-900">{Number(latestPh || 0).toFixed(1)}</div>
-                                <div className="text-[9px] text-slate-400 font-bold">Soil pH</div>
+                              <div>
+                                <span className="text-[10px] text-slate-400 font-bold block">Soil pH</span>
+                                <strong className="text-purple-700 font-black">{plot.soilPh.toFixed(2)}</strong>
                               </div>
                             </div>
 
-                            {/* Soil Health Score Bar */}
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px] font-bold">
-                                <span className="text-slate-500">Soil Health Index</span>
-                                <span className="text-emerald-700">{plot.soilHealthScore}/100</span>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-1.5">
-                                <div
-                                  className="h-1.5 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all"
-                                  style={{ width: `${plot.soilHealthScore || 88}%` }}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Bottom Info Row */}
-                            <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">
-                              <span className={`flex items-center gap-1 font-bold ${plot.irrigationStatus === 'Active Drip' || plot.irrigationStatus === 'Automated Sprinkler' ? 'text-blue-600' : 'text-slate-400'}`}>
-                                <Droplets className="w-3 h-3" />
-                                {plot.irrigationStatus}
+                            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                              <span>Sensors: <strong className="text-slate-800">{plotSensors.length} Nodes</strong></span>
+                              <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">
+                                {plot.irrigationStatus || 'Active Drip'}
                               </span>
-                              <span className="text-slate-400 flex items-center gap-1">
-                                <Cpu className="w-3 h-3 text-indigo-400" />
-                                {plotSensors.length} sensors
-                              </span>
-                              <span className="font-mono text-slate-400">{plot.sensorNodeId}</span>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Farm Footer — Supabase Status */}
-                  <div className="mt-4 flex items-center gap-2 text-[10px] text-slate-500 font-mono">
-                    <Database className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Farm ID: <strong>{farm.id}</strong></span>
-                    <span>·</span>
-                    <span className={`font-bold ${isSupabaseConfigured ? 'text-emerald-600' : 'text-slate-400'}`}>
-                      {isSupabaseConfigured ? '● Supabase: CONNECTED' : '○ Local State Only'}
-                    </span>
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+      {/* -- MODAL: ADD FARM ---------------------------------------------- */}
+      {isAddFarmOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-black text-slate-900">Add New Farmland</h3>
+              <button onClick={() => setIsAddFarmOpen(false)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateFarm} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Farm Name *</label>
+                <input
+                  type="text"
+                  value={newFarmName}
+                  onChange={(e) => setNewFarmName(e.target.value)}
+                  placeholder="e.g. Green Valley Precision Farm"
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Location *</label>
+                <input
+                  type="text"
+                  value={newFarmLocation}
+                  onChange={(e) => setNewFarmLocation(e.target.value)}
+                  placeholder="e.g. Belagavi, Karnataka"
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Total Area (Acres)</label>
+                  <input
+                    type="number"
+                    value={newFarmArea}
+                    onChange={(e) => setNewFarmArea(e.target.value)}
+                    min="1"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Owner Name</label>
+                  <input
+                    type="text"
+                    value={newFarmOwner}
+                    onChange={(e) => setNewFarmOwner(e.target.value)}
+                    placeholder="Owner name"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Contact Phone</label>
+                <input
+                  type="tel"
+                  value={newFarmPhone}
+                  onChange={(e) => setNewFarmPhone(e.target.value)}
+                  placeholder="+91 98765 00000"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddFarmOpen(false)}
+                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/30"
+                >
+                  Save Farm
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* -- MODAL: EDIT FARM --------------------------------------------- */}
+      {editingFarm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-black text-slate-900">Edit Farm: {editingFarm.name}</h3>
+              <button onClick={() => setEditingFarm(null)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFarmEdit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Farm Name</label>
+                <input
+                  type="text"
+                  value={editingFarm.name}
+                  onChange={(e) => setEditingFarm({ ...editingFarm, name: e.target.value })}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Location</label>
+                <input
+                  type="text"
+                  value={editingFarm.location}
+                  onChange={(e) => setEditingFarm({ ...editingFarm, location: e.target.value })}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Area ({editingFarm.unit})</label>
+                  <input
+                    type="number"
+                    value={editingFarm.totalArea}
+                    onChange={(e) => setEditingFarm({ ...editingFarm, totalArea: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Owner Name</label>
+                  <input
+                    type="text"
+                    value={editingFarm.ownerName || editingFarm.contactPerson || ''}
+                    onChange={(e) => setEditingFarm({ ...editingFarm, ownerName: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Contact Phone</label>
+                <input
+                  type="tel"
+                  value={editingFarm.contactPhone || ''}
+                  onChange={(e) => setEditingFarm({ ...editingFarm, contactPhone: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingFarm(null)}
+                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/30"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* -- MODAL: ADD PLOT ---------------------------------------------- */}
+      {isAddPlotOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-black text-slate-900">Add Plot to Farm</h3>
+              <button onClick={() => setIsAddPlotOpen(null)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePlot} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Plot Code *</label>
+                  <input
+                    type="text"
+                    value={newPlotCode}
+                    onChange={(e) => setNewPlotCode(e.target.value)}
+                    placeholder="e.g. SEC-E"
+                    required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium uppercase font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Area (Acres)</label>
+                  <input
+                    type="number"
+                    value={newPlotArea}
+                    onChange={(e) => setNewPlotArea(e.target.value)}
+                    min="0.1"
+                    step="0.1"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Plot Name *</label>
+                <input
+                  type="text"
+                  value={newPlotName}
+                  onChange={(e) => setNewPlotName(e.target.value)}
+                  placeholder="e.g. Section E - Precision Soybean"
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Crop Cultivar</label>
+                  <select
+                    value={newPlotCrop}
+                    onChange={(e) => setNewPlotCrop(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {['Tomato', 'Chilli', 'Cotton', 'Maize', 'Groundnut', 'Wheat', 'Rice', 'Soybean', 'Sugarcane', 'Bell Pepper'].map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Growth Stage</label>
+                  <select
+                    value={newPlotStage}
+                    onChange={(e) => setNewPlotStage(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {['Germination', 'Vegetative', 'Flowering', 'Fruiting', 'Maturation', 'Harvesting'].map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPlotOpen(null)}
+                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/30"
+                >
+                  Create Plot
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* -- MODAL: EDIT PLOT --------------------------------------------- */}
+      {editingPlot && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-black text-slate-900">Edit Plot: {editingPlot.name}</h3>
+              <button onClick={() => setEditingPlot(null)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePlotEdit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Plot Name</label>
+                <input
+                  type="text"
+                  value={editingPlot.name}
+                  onChange={(e) => setEditingPlot({ ...editingPlot, name: e.target.value })}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Crop</label>
+                  <select
+                    value={editingPlot.cropType || 'Tomato'}
+                    onChange={(e) => setEditingPlot({ ...editingPlot, cropType: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {['Tomato', 'Chilli', 'Cotton', 'Maize', 'Groundnut', 'Wheat', 'Rice', 'Soybean', 'Sugarcane', 'Bell Pepper'].map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Growth Stage</label>
+                  <select
+                    value={editingPlot.growthStage || 'Vegetative'}
+                    onChange={(e) => setEditingPlot({ ...editingPlot, growthStage: e.target.value as any })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {['Germination', 'Vegetative', 'Flowering', 'Fruiting', 'Maturation', 'Harvesting'].map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Moisture %</label>
+                  <input
+                    type="number"
+                    value={editingPlot.soilMoisture}
+                    onChange={(e) => setEditingPlot({ ...editingPlot, soilMoisture: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Temp �C</label>
+                  <input
+                    type="number"
+                    value={editingPlot.airTemp}
+                    onChange={(e) => setEditingPlot({ ...editingPlot, airTemp: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Soil pH</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editingPlot.soilPh}
+                    onChange={(e) => setEditingPlot({ ...editingPlot, soilPh: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPlot(null)}
+                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/30"
+                >
+                  Save Plot
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

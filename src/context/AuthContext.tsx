@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { ActivityLogger } from '../lib/activity-logger';
 
 interface AuthUser {
   uid: string;
@@ -15,8 +16,10 @@ interface AuthContextType {
   assignedFarmIds: string[];
   isAdmin: boolean;
   isFarmer: boolean;
+  isManager: boolean;
+  isWorker: boolean;
   loading: boolean;
-  signup: (email: string, password: string, fullName: string, role: UserRole, assignedFarmIds?: string[]) => Promise<UserProfile>;
+  signup: (email: string, password: string, fullName: string, role: UserRole, assignedFarmIds?: string[], phone?: string) => Promise<UserProfile>;
   login: (email: string, password: string) => Promise<UserProfile | null>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -35,6 +38,8 @@ const DEFAULT_CREDENTIALS: Record<string, { password: string; profile: UserProfi
       full_name: 'System Administrator',
       role: 'admin',
       assigned_farm_ids: [],
+      phone: '+91 98765 00001',
+      isActive: true,
       created_at: new Date().toISOString()
     }
   },
@@ -43,9 +48,11 @@ const DEFAULT_CREDENTIALS: Record<string, { password: string; profile: UserProfi
     profile: {
       uid: 'usr_farmer_002',
       email: 'farmer@agritwin.com',
-      full_name: 'Field Worker / Farmer',
+      full_name: 'Irappa Patil',
       role: 'farmer',
-      assigned_farm_ids: [],
+      assigned_farm_ids: ['farm_iiit_dharwad'],
+      phone: '+91 98765 00002',
+      isActive: true,
       created_at: new Date().toISOString()
     }
   }
@@ -82,7 +89,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Check local persistent active session on mount
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(ACTIVE_SESSION_KEY);
       if (saved) {
@@ -94,7 +100,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem(ACTIVE_SESSION_KEY);
         }
       } else {
-        // Default to admin user for smooth presentation experience
         const defaultAdmin = DEFAULT_CREDENTIALS['admin@agritwin.com'].profile;
         setUser({ uid: defaultAdmin.uid, email: defaultAdmin.email, displayName: defaultAdmin.full_name });
         setUserProfile(defaultAdmin);
@@ -105,11 +110,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signup = async (
-    email: string, 
-    password: string, 
-    fullName: string, 
-    role: UserRole, 
-    assignedFarmIds: string[] = []
+    email: string,
+    password: string,
+    fullName: string,
+    role: UserRole,
+    assignedFarmIds: string[] = [],
+    phone?: string
   ): Promise<UserProfile> => {
     const uid = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const profile: UserProfile = {
@@ -118,6 +124,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       full_name: fullName,
       role,
       assigned_farm_ids: assignedFarmIds,
+      phone,
+      isActive: true,
       created_at: new Date().toISOString()
     };
 
@@ -129,7 +137,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(profile));
     }
 
-    // Optionally sync user to Supabase
     if (isSupabaseConfigured) {
       try {
         await supabase.from('users').upsert({
@@ -137,7 +144,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email,
           full_name: fullName,
           role,
-          assigned_farm_ids: assignedFarmIds
+          assigned_farm_ids: assignedFarmIds,
+          phone,
+          is_active: true
         });
       } catch (e) {
         console.warn('Supabase user sync notice:', e);
@@ -168,14 +177,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw error;
     }
 
-    // Generic fallback for any email with standard password
     const uid = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const profile: UserProfile = {
       uid,
       email,
-      full_name: email.split('@')[0] || 'AgriTwin User',
+      full_name: email.split('@')[0] || 'AgriTwin Farmer',
       role: 'farmer',
       assigned_farm_ids: [],
+      isActive: true,
       created_at: new Date().toISOString()
     };
 
@@ -189,6 +198,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async (): Promise<void> => {
+    if (userProfile) {
+      ActivityLogger.userLogout(userProfile.full_name, userProfile.email);
+    }
     if (typeof window !== 'undefined') {
       localStorage.removeItem(ACTIVE_SESSION_KEY);
     }
@@ -201,7 +213,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (creds[email.toLowerCase()]) {
       return;
     }
-    const error: any = new Error('No user found with this email address.');
+    const error: any = new Error('No account found with this email address.');
     error.code = 'auth/user-not-found';
     throw error;
   };
@@ -218,6 +230,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const role = userProfile?.role || null;
   const isAdmin = role === 'admin';
   const isFarmer = role === 'farmer';
+  const isManager = role === 'farm_manager';
+  const isWorker = role === 'worker';
   const assignedFarmIds = userProfile?.assigned_farm_ids || [];
 
   return (
@@ -229,6 +243,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         assignedFarmIds,
         isAdmin,
         isFarmer,
+        isManager,
+        isWorker,
         loading,
         signup,
         login,

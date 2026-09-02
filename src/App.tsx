@@ -27,6 +27,8 @@ import Crops from './pages/farm-management/Crops';
 import FieldAuditLog from './pages/farm-management/FieldAuditLog';
 import MyFarms from './pages/MyFarms';
 import DatabaseMonitor from './pages/DatabaseMonitor';
+import ActivityLog from './pages/ActivityLog';
+import Alerts from './pages/Alerts';
 
 import AddNewFarmlandPage from './pages/AddNewFarmlandPage';
 import ManualTelemetryPage from './pages/ManualTelemetryPage';
@@ -34,11 +36,9 @@ import ResearchView from './pages/ResearchView';
 
 import { AgriStoreProvider } from './context/AgriStore';
 
-// Clean-Slate Gatekeeper: redirects to /onboarding if no farm/plot exists
 const CleanSlateGatekeeper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-
-  const isCleanSlate = false; // AgriStore seeds default IIIT Dharwad farm
+  const isCleanSlate = false;
 
   if (isCleanSlate && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
@@ -53,80 +53,82 @@ function App() {
       <AuthProvider>
         <UserModeProvider>
           <Router>
-          <Routes>
-            {/* Public Authentication Routes */}
-            <Route
-              path="/login"
-              element={
-                <PublicOnlyRoute>
-                  <Login />
-                </PublicOnlyRoute>
-              }
-            />
-            <Route
-              path="/signup"
-              element={
-                <PublicOnlyRoute>
-                  <SignUp />
-                </PublicOnlyRoute>
-              }
-            />
+            <Routes>
+              {/* Public Authentication Routes */}
+              <Route
+                path="/login"
+                element={
+                  <PublicOnlyRoute>
+                    <Login />
+                  </PublicOnlyRoute>
+                }
+              />
+              <Route
+                path="/signup"
+                element={
+                  <PublicOnlyRoute>
+                    <SignUp />
+                  </PublicOnlyRoute>
+                }
+              />
 
-            {/* Protected Onboarding Wizard */}
-            <Route
-              path="/onboarding"
-              element={
-                <ProtectedRoute>
-                  <GuidedOnboardingWizard />
-                </ProtectedRoute>
-              }
-            />
+              {/* Protected Onboarding Wizard */}
+              <Route
+                path="/onboarding"
+                element={
+                  <ProtectedRoute>
+                    <GuidedOnboardingWizard />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Protected Main Application Layout */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <CleanSlateGatekeeper>
-                    <AppLayout />
-                  </CleanSlateGatekeeper>
-                </ProtectedRoute>
-              }
-            >
-              {/* Tier 1 & Operational Routes */}
-              <Route index element={<Dashboard />} />
-              <Route path="my-farms" element={<MyFarms />} />
-              <Route path="crop-health" element={<CropVision />} />
-              <Route path="virtual-farm" element={<VirtualFarm />} />
-              <Route path="advisor" element={<AIAdvisor />} />
-              <Route path="vision" element={<CropHealthAdvisor />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="history" element={<FieldLog />} />
-              <Route path="control" element={<DeviceControl />} />
-              <Route path="camera" element={<CameraFeed />} />
-              <Route path="map" element={<MapView />} />
+              {/* Protected Main Application Layout */}
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <CleanSlateGatekeeper>
+                      <AppLayout />
+                    </CleanSlateGatekeeper>
+                  </ProtectedRoute>
+                }
+              >
+                {/* Operations & Monitoring Tier */}
+                <Route index element={<Dashboard />} />
+                <Route path="my-farms" element={<MyFarms />} />
+                <Route path="crop-health" element={<CropVision />} />
+                <Route path="virtual-farm" element={<VirtualFarm />} />
+                <Route path="advisor" element={<AIAdvisor />} />
+                <Route path="vision" element={<CropHealthAdvisor />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="history" element={<FieldLog />} />
+                <Route path="activity-log" element={<ActivityLog />} />
+                <Route path="alerts" element={<Alerts />} />
+                <Route path="control" element={<DeviceControl />} />
+                <Route path="camera" element={<CameraFeed />} />
+                <Route path="map" element={<MapView />} />
 
-              {/* Tier 2 & Tier 3 Admin Routes */}
-              <Route path="db-monitor" element={<AdminRoute><DatabaseMonitor /></AdminRoute>} />
-              <Route path="add-farmland" element={<AdminRoute><AddNewFarmlandPage /></AdminRoute>} />
-              <Route path="manual-telemetry" element={<AdminRoute><ManualTelemetryPage /></AdminRoute>} />
-              <Route path="research" element={<AdminRoute><ResearchView /></AdminRoute>} />
-              <Route path="what-if" element={<AdminRoute><WhatIfSimulator /></AdminRoute>} />
-              <Route path="sensors" element={<AdminRoute><MySensors /></AdminRoute>} />
-              <Route path="compare" element={<AdminRoute><CropComparison /></AdminRoute>} />
-              <Route path="farm-management/crops" element={<AdminRoute><Crops /></AdminRoute>} />
-              <Route path="farm-management/audit-log" element={<AdminRoute><FieldAuditLog /></AdminRoute>} />
-              <Route path="audit-log" element={<AdminRoute><FieldAuditLog /></AdminRoute>} />
-              <Route path="users" element={<AdminRoute><UserManagement /></AdminRoute>} />
-            </Route>
+                {/* Advanced & Administration Tier */}
+                <Route path="db-monitor" element={<AdminRoute><DatabaseMonitor /></AdminRoute>} />
+                <Route path="add-farmland" element={<AdminRoute><AddNewFarmlandPage /></AdminRoute>} />
+                <Route path="manual-telemetry" element={<AdminRoute><ManualTelemetryPage /></AdminRoute>} />
+                <Route path="research" element={<AdminRoute><ResearchView /></AdminRoute>} />
+                <Route path="what-if" element={<AdminRoute><WhatIfSimulator /></AdminRoute>} />
+                <Route path="sensors" element={<AdminRoute><MySensors /></AdminRoute>} />
+                <Route path="compare" element={<AdminRoute><CropComparison /></AdminRoute>} />
+                <Route path="farm-management/crops" element={<AdminRoute><Crops /></AdminRoute>} />
+                <Route path="farm-management/audit-log" element={<AdminRoute><FieldAuditLog /></AdminRoute>} />
+                <Route path="audit-log" element={<AdminRoute><FieldAuditLog /></AdminRoute>} />
+                <Route path="users" element={<AdminRoute><UserManagement /></AdminRoute>} />
+              </Route>
 
-            {/* Catch-all redirect */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Router>
-      </UserModeProvider>
-    </AuthProvider>
-  </AgriStoreProvider>
+              {/* Catch-all redirect */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Router>
+        </UserModeProvider>
+      </AuthProvider>
+    </AgriStoreProvider>
   );
 }
 

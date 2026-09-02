@@ -1,6 +1,8 @@
-export type ViewMode = 'dashboard' | 'twin' | 'disease' | 'growth' | 'ripeness' | 'yield' | 'sensors' | 'alerts';
+﻿export type ViewMode = 'dashboard' | 'twin' | 'disease' | 'growth' | 'ripeness' | 'yield' | 'sensors' | 'alerts';
 
 export type AreaUnit = 'acres' | 'hectares' | 'sqft' | 'sqm';
+
+export type UserRole = 'admin' | 'farm_manager' | 'worker' | 'viewer' | 'farmer';
 
 export interface FarmProfile {
   name: string;
@@ -34,6 +36,7 @@ export interface Farmland {
   name: string;
   location: string;
   address?: string;
+  ownerName?: string;
   contactPerson?: string;
   contactPhone?: string;
   contactRole?: 'Owner' | 'Manager' | 'Worker';
@@ -58,11 +61,12 @@ export interface PlotBed {
   cropType?: string;
   growthStage?: 'Germination' | 'Vegetative' | 'Flowering' | 'Fruiting' | 'Maturation' | 'Harvesting';
   sensorNodeId: string;
-  sensorId?: string; // alias for sensorNodeId
+  sensorId?: string;
   boundaryCoordinates?: [number, number][];
   soilMoisture: number;
   airTemp: number;
   soilPh: number;
+  humidity?: number;
   parLux?: number;
   daysPlanted: number;
   isWatering?: boolean;
@@ -70,7 +74,7 @@ export interface PlotBed {
   irrigationStatus?: 'Active Drip' | 'Automated Sprinkler' | 'Scheduled' | 'Idle';
   soilHealthScore?: number;
   createdAt?: string;
-  farmId?: string; // set by farm-creation flow; required for telemetry ownership
+  farmId?: string;
 }
 
 export interface IoTSensor {
@@ -98,7 +102,76 @@ export interface AuditLogEntry {
   details: string;
 }
 
-export type UserRole = 'admin' | 'farmer';
+export type ActivityEventType =
+  | 'telemetry_update'
+  | 'sensor_online'
+  | 'sensor_offline'
+  | 'farm_created'
+  | 'farm_updated'
+  | 'farm_deleted'
+  | 'plot_created'
+  | 'plot_updated'
+  | 'plot_deleted'
+  | 'sensor_added'
+  | 'sensor_removed'
+  | 'alert_generated'
+  | 'alert_resolved'
+  | 'irrigation_triggered'
+  | 'hvac_triggered'
+  | 'user_login'
+  | 'user_logout'
+  | 'csv_export'
+  | 'manual_observation'
+  | 'settings_modified'
+  | 'system_event';
+
+export type ActivitySeverity = 'info' | 'warning' | 'critical' | 'success';
+
+export interface FieldActivity {
+  id: string;
+  timestamp: string;
+  farmId?: string;
+  plotId?: string;
+  sensorId?: string;
+  eventType: ActivityEventType;
+  title: string;
+  description: string;
+  severity: ActivitySeverity;
+  createdBy?: string;
+  metadata?: Record<string, any>;
+}
+
+export type AlertType =
+  | 'low_soil_moisture'
+  | 'high_temperature'
+  | 'low_humidity'
+  | 'abnormal_ph'
+  | 'sensor_offline'
+  | 'data_missing'
+  | 'critical_system_error'
+  | 'high_soil_moisture'
+  | 'low_temperature';
+
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+export type AlertStatus = 'active' | 'resolved' | 'dismissed';
+
+export interface FarmAlert {
+  id: string;
+  farmId?: string;
+  plotId?: string;
+  sensorId?: string;
+  alertType: AlertType;
+  title: string;
+  message: string;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  parameterKey?: string;
+  value?: number;
+  threshold?: number;
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+}
 
 export interface UserProfile {
   uid: string;
@@ -106,6 +179,8 @@ export interface UserProfile {
   full_name: string;
   role: UserRole;
   assigned_farm_ids: string[];
+  phone?: string;
+  isActive?: boolean;
   created_at: string;
 }
 
@@ -165,11 +240,11 @@ export interface CropParameter {
 export interface SensorData {
   id: string;
   name: string;
-  temperature: number; // °C
-  humidity: number; // %
-  soilMoisture: number; // %
-  sunlightLux: number; // lux
-  co2Level: number; // ppm
+  temperature: number;
+  humidity: number;
+  soilMoisture: number;
+  sunlightLux: number;
+  co2Level: number;
   lastUpdated: string;
   status: 'online' | 'offline' | 'warning';
 }
@@ -236,4 +311,15 @@ export interface PresentationConfig {
   collegeName: string;
   teamMembers: string[];
   clientName: string;
+}
+
+export interface ExportFilter {
+  dateFrom?: string;
+  dateTo?: string;
+  farmId?: string;
+  plotId?: string;
+  sensorId?: string;
+  severity?: ActivitySeverity | 'all';
+  eventType?: ActivityEventType | 'all';
+  format?: 'csv' | 'excel';
 }
