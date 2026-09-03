@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Crop, Farmland, PlotBed, UserProfile, AuditLogEntry, TelemetryObservation, IoTSensor, FieldActivity, FarmAlert } from '../types';
 import {
   saveFarmsToSupabase,
@@ -312,63 +312,80 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     saveSensorsToSupabase(sensors);
   }, []);
 
+  // Real-time Telemetry Processor (used by Supabase Realtime & Simulator)
+  const processIncomingTelemetry = useCallback((incomingObs: TelemetryObservation[]) => {
+    if (!incomingObs || incomingObs.length === 0) return;
+
+    setTelemetryObservations((prev) => {
+      const obsMap = new Map<string, TelemetryObservation>();
+      (prev || []).forEach((o) => { if (o && o.id) obsMap.set(o.id, o); });
+      (incomingObs || []).forEach((o) => { if (o && o.id) obsMap.set(o.id, o); });
+
+      const validObs = Array.from(obsMap.values()).filter((o) => o && o.id && o.measurementTimestamp);
+      const mergedList = validObs.sort((a, b) => {
+        const tA = new Date(a.measurementTimestamp).getTime() || 0;
+        const tB = new Date(b.measurementTimestamp).getTime() || 0;
+        return tB - tA;
+      });
+
+      // Update plot live telemetry state
+      setPlots((prevPlots) => {
+        const updatedPlots = prevPlots.map((plot) => {
+          const plotObs = mergedList.filter((o) => o.plotId === plot.id || o.plotId === plot.code);
+          if (plotObs.length === 0) return plot;
+
+          const latestSm = plotObs.find((o) => o.parameterKey === 'soil_moisture');
+          const latestTemp = plotObs.find((o) => o.parameterKey === 'air_temperature' || o.parameterKey === 'soil_temperature');
+          const latestPh = plotObs.find((o) => o.parameterKey === 'soil_ph');
+          const latestHum = plotObs.find((o) => o.parameterKey === 'humidity');
+
+          const newSm = latestSm ? latestSm.value : plot.soilMoisture;
+          const newTemp = latestTemp ? latestTemp.value : plot.airTemp;
+          const newPh = latestPh ? latestPh.value : plot.soilPh;
+          const newHum = latestHum ? latestHum.value : plot.humidity;
+
+          // Dynamically compute soil health score based on agronomic thresholds
+          let healthScore = 95;
+          if (newSm < 30 || newSm > 80) healthScore -= 12;
+          else if (newSm < 40 || newSm > 70) healthScore -= 5;
+          if (newTemp < 15 || newTemp > 35) healthScore -= 10;
+          else if (newTemp < 18 || newTemp > 30) healthScore -= 4;
+          if (newPh < 5.8 || newPh > 7.5) healthScore -= 8;
+
+          return {
+            ...plot,
+            soilMoisture: newSm,
+            airTemp: newTemp,
+            soilPh: newPh,
+            humidity: newHum,
+            soilHealthScore: Math.max(50, Math.min(99, healthScore)),
+          };
+        });
+
+        // Run alert evaluation on updated plots
+        updatedPlots.forEach((p) => {
+          setAlerts((currentAlerts) => {
+            const newAlerts = evaluatePlotAlerts(p, currentAlerts);
+            if (newAlerts.length > 0) {
+              newAlerts.forEach((na) => {
+                saveAlertToSupabase(na);
+                ActivityLogger.alertGenerated(na.title, na.farmId, na.plotId);
+              });
+              return [...newAlerts, ...currentAlerts];
+            }
+            return currentAlerts;
+          });
+        });
+
+        return updatedPlots;
+      });
+
+      return mergedList;
+    });
+  }, []);
+
   // Real-time Supabase Subscription
   useEffect(() => {
-    const processIncomingTelemetry = (incomingObs: TelemetryObservation[]) => {
-      setTelemetryObservations((prev) => {
-        const obsMap = new Map<string, TelemetryObservation>();
-        (prev || []).forEach((o) => { if (o && o.id) obsMap.set(o.id, o); });
-        (incomingObs || []).forEach((o) => { if (o && o.id) obsMap.set(o.id, o); });
-
-        const validObs = Array.from(obsMap.values()).filter((o) => o && o.id && o.measurementTimestamp);
-        const mergedList = validObs.sort((a, b) => {
-          const tA = new Date(a.measurementTimestamp).getTime() || 0;
-          const tB = new Date(b.measurementTimestamp).getTime() || 0;
-          return tB - tA;
-        });
-
-        // Update plot live telemetry state
-        setPlots((prevPlots) => {
-          const updatedPlots = prevPlots.map((plot) => {
-            const plotObs = mergedList.filter((o) => o.plotId === plot.id || o.plotId === plot.code);
-            if (plotObs.length === 0) return plot;
-
-            const latestSm = plotObs.find((o) => o.parameterKey === 'soil_moisture');
-            const latestTemp = plotObs.find((o) => o.parameterKey === 'air_temperature' || o.parameterKey === 'soil_temperature');
-            const latestPh = plotObs.find((o) => o.parameterKey === 'soil_ph');
-            const latestHum = plotObs.find((o) => o.parameterKey === 'humidity');
-
-            return {
-              ...plot,
-              soilMoisture: latestSm ? latestSm.value : plot.soilMoisture,
-              airTemp: latestTemp ? latestTemp.value : plot.airTemp,
-              soilPh: latestPh ? latestPh.value : plot.soilPh,
-              humidity: latestHum ? latestHum.value : plot.humidity,
-            };
-          });
-
-          // Run alert evaluation on updated plots
-          updatedPlots.forEach((p) => {
-            setAlerts((currentAlerts) => {
-              const newAlerts = evaluatePlotAlerts(p, currentAlerts);
-              if (newAlerts.length > 0) {
-                newAlerts.forEach((na) => {
-                  saveAlertToSupabase(na);
-                  ActivityLogger.alertGenerated(na.title, na.farmId, na.plotId);
-                });
-                return [...newAlerts, ...currentAlerts];
-              }
-              return currentAlerts;
-            });
-          });
-
-          return updatedPlots;
-        });
-
-        return mergedList;
-      });
-    };
-
     const handleRealtimeActivity = (act: FieldActivity) => {
       setFieldActivities((prev) => [act, ...prev.filter((a) => a.id !== act.id)].slice(0, 500));
     };
@@ -389,7 +406,7 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       unsubSupabase();
     };
-  }, []);
+  }, [processIncomingTelemetry]);
 
   const plotsRef = useRef(plots);
   const cropsRef = useRef(crops);
@@ -404,7 +421,10 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         () => plotsRef.current,
         () => cropsRef.current,
         () => sensorsRef.current,
-        (_obs, updatedSensors) => {
+        (incomingObs, updatedSensors) => {
+          if (incomingObs && incomingObs.length > 0) {
+            processIncomingTelemetry(incomingObs);
+          }
           if (updatedSensors && updatedSensors.length > 0) {
             setSensors((prev) => {
               const map = new Map<string, IoTSensor>();
@@ -429,7 +449,7 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } else {
       telemetrySimulator.stop();
     }
-  }, [isDemoTelemetryActive]);
+  }, [isDemoTelemetryActive, processIncomingTelemetry]);
 
   const toggleDemoTelemetry = (enable: boolean) => {
     setIsDemoTelemetryActive(enable);
@@ -439,7 +459,19 @@ export const AgriStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const triggerTelemetrySimulationNow = async () => {
-    await telemetrySimulator.triggerCycle();
+    await telemetrySimulator.triggerCycle((incomingObs, updatedSensors) => {
+      if (incomingObs && incomingObs.length > 0) {
+        processIncomingTelemetry(incomingObs);
+      }
+      if (updatedSensors && updatedSensors.length > 0) {
+        setSensors((prev) => {
+          const map = new Map<string, IoTSensor>();
+          (prev || []).forEach((s) => map.set(s.id, s));
+          updatedSensors.forEach((s) => map.set(s.id, s));
+          return Array.from(map.values());
+        });
+      }
+    });
   };
 
   // LocalStorage Persist Effects

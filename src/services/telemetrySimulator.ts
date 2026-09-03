@@ -13,6 +13,7 @@ class TelemetrySimulatorService {
   private getPlotsFn: (() => PlotBed[]) | null = null;
   private getCropsFn: (() => Crop[]) | null = null;
   private getSensorsFn: (() => IoTSensor[]) | null = null;
+  private onGeneratedFn: ((observations: TelemetryObservation[], updatedSensors?: IoTSensor[]) => void) | null = null;
   private lastCycleTime: number | null = null;
 
   public getSessionId(): string {
@@ -47,6 +48,7 @@ class TelemetrySimulatorService {
     this.getPlotsFn = getPlots;
     this.getCropsFn = getCrops;
     this.getSensorsFn = getSensors || null;
+    this.onGeneratedFn = onGenerated || null;
 
     if (this.isRunning) {
       return;
@@ -59,14 +61,14 @@ class TelemetrySimulatorService {
     // Run first generation cycle immediately after 1 second delay
     setTimeout(() => {
       if (this.isRunning) {
-        this.generateAndPersistCycle(onGenerated);
+        this.generateAndPersistCycle(this.onGeneratedFn || undefined);
       }
     }, 1000);
 
     // Set 10-second recurring timer
     this.timerId = setInterval(() => {
       if (this.isRunning) {
-        this.generateAndPersistCycle(onGenerated);
+        this.generateAndPersistCycle(this.onGeneratedFn || undefined);
       }
     }, this.intervalMs);
   }
@@ -83,7 +85,7 @@ class TelemetrySimulatorService {
   }
 
   public async triggerCycle(onGenerated?: (observations: TelemetryObservation[], updatedSensors?: IoTSensor[]) => void) {
-    return this.generateAndPersistCycle(onGenerated);
+    return this.generateAndPersistCycle(onGenerated || this.onGeneratedFn || undefined);
   }
 
   private async generateAndPersistCycle(
@@ -91,8 +93,13 @@ class TelemetrySimulatorService {
   ) {
     let sensorsToProcess: IoTSensor[] = [];
 
-    // 1. Fetch sensors from public.sensors if Supabase is configured
-    if (isSupabaseConfigured) {
+    // 1. Prioritize in-memory sensors from store
+    if (this.getSensorsFn) {
+      sensorsToProcess = this.getSensorsFn() || [];
+    }
+
+    // Fallback: Fetch sensors from public.sensors if memory is empty and Supabase is configured
+    if (sensorsToProcess.length === 0 && isSupabaseConfigured) {
       try {
         const { data: dbSensors, error } = await supabase.from('sensors').select('*');
         if (!error && dbSensors && dbSensors.length > 0) {
@@ -114,11 +121,6 @@ class TelemetrySimulatorService {
       } catch (e) {
         console.warn('TelemetrySimulator: Could not fetch public.sensors directly, using fallback.');
       }
-    }
-
-    // Fallback to store sensors if DB list empty
-    if (sensorsToProcess.length === 0 && this.getSensorsFn) {
-      sensorsToProcess = this.getSensorsFn() || [];
     }
 
     if (!sensorsToProcess || sensorsToProcess.length === 0) {
@@ -213,14 +215,6 @@ class TelemetrySimulatorService {
         newValueStr = `${newValueNum}`;
       }
 
-      // 3. Update public.sensors.current_reading
-      if (isSupabaseConfigured) {
-        await updateSensorReadingInSupabase(sensor.id, newValueStr);
-      }
-
-      // 5. Log exact required format
-      console.log(`[SENSOR UPDATED] sensorId=${sensor.id} oldValue=${oldValue} newValue=${newValueStr}`);
-
       // Track updated sensor locally
       updatedSensors.push({
         ...sensor,
@@ -258,6 +252,23 @@ class TelemetrySimulatorService {
       } catch (err: any) {
         console.warn('TelemetrySimulator: Telemetry batch write notice:', err?.message);
       }
+    }
+
+    // Persist updated sensors in a single batch upsert
+    if (isSupabaseConfigured && updatedSensors.length > 0) {
+      const sensorDbRows = updatedSensors.map((s) => ({
+        id: s.id,
+        farm_id: s.farmId,
+        plot_id: s.plotId,
+        sensor_code: s.sensorCode,
+        sensor_type: s.type,
+        assigned_plot_code: s.assignedPlotCode,
+        current_reading: s.currentReading,
+        last_ping: s.lastPing,
+      }));
+      Promise.resolve(supabase.from('sensors').upsert(sensorDbRows))
+        .then(() => {})
+        .catch((err: any) => console.warn('TelemetrySimulator: Sensors batch update notice:', err?.message));
     }
 
     if (onGenerated) {

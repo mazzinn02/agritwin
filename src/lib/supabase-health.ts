@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, SUPABASE_URL } from './supabase';
 import { TelemetryObservation } from '../types';
 
 export interface SupabaseConnectionStatus {
@@ -29,8 +29,7 @@ export interface InsertRecordResult {
  * B. Check Supabase database connectivity and return detailed status.
  */
 export async function checkSupabaseConnection(): Promise<SupabaseConnectionStatus> {
-  const env = (import.meta as any).env || {};
-  const dbUrl = env.VITE_SUPABASE_URL || 'Not configured';
+  const dbUrl = SUPABASE_URL;
 
   if (!isSupabaseConfigured) {
     return {

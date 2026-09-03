@@ -1,15 +1,19 @@
-﻿/// <reference types="vite/client" />
+/// <reference types="vite/client" />
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { TelemetryObservation, FieldActivity, FarmAlert } from '../types';
 
-const env = (import.meta as any).env || {};
-const SUPABASE_URL = env.VITE_SUPABASE_URL || 'https://xyzcompany.supabase.co';
-const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || 'public-anon-key-placeholder';
+const DEFAULT_SUPABASE_URL = 'https://wuxoulvgscbjpgyngyiw.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_blRwFF9JR2iHR_TIVaEL-Q_NpdqyKF5';
+
+const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+export const SUPABASE_URL = env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+export const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(
-  env.VITE_SUPABASE_URL &&
-  env.VITE_SUPABASE_ANON_KEY &&
-  !env.VITE_SUPABASE_URL.includes('xyzcompany')
+  SUPABASE_URL &&
+  SUPABASE_ANON_KEY &&
+  !SUPABASE_URL.includes('xyzcompany') &&
+  !SUPABASE_ANON_KEY.includes('placeholder')
 );
 
 export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
